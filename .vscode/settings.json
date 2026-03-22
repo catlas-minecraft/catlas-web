@@ -48,6 +48,7 @@
   "editor.parameterHints.enabled": true,
   "files.insertFinalNewline": true,
   "cSpell.words": [
+    "Bbox",
     "Catlas",
     "Geospatial",
     "Kysely"

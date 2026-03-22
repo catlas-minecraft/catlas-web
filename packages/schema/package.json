@@ -24,7 +24,7 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
-    "effect": "latest"
+    "effect": "3.21.0"
   },
   "effect": {
     "generateExports": {

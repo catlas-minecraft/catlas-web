@@ -24,10 +24,10 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@effect/platform": "latest",
-    "@effect/sql": "latest",
+    "@effect/platform": "0.96.0",
+    "@effect/sql": "0.51.0",
     "@catlas/schema": "workspace:^",
-    "effect": "latest"
+    "effect": "3.21.0"
   },
   "effect": {
     "generateExports": {

@@ -28,10 +28,10 @@
     "@catlas/domain": "workspace:^",
     "@catlas/louis": "workspace:^",
     "@effect/experimental": "^0.60.0",
-    "@effect/platform": "latest",
-    "@effect/platform-node": "latest",
-    "@effect/sql-kysely": "latest",
-    "effect": "latest",
+    "@effect/platform": "0.96.0",
+    "@effect/platform-node": "0.106.0",
+    "@effect/sql-kysely": "0.47.0",
+    "effect": "3.21.0",
     "kysely": "^0.28.14"
   },
   "effect": {

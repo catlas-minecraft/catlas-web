@@ -25,10 +25,10 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@effect/sql": "latest",
-    "@effect/sql-kysely": "latest",
-    "@effect/sql-pg": "latest",
-    "effect": "latest",
+    "@effect/sql": "0.51.0",
+    "@effect/sql-kysely": "0.47.0",
+    "@effect/sql-pg": "0.52.0",
+    "effect": "3.21.0",
     "kysely": "^0.28.2",
     "pg": "^8.16.3"
   },

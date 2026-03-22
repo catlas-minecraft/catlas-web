@@ -25,10 +25,10 @@
   },
   "dependencies": {
     "@catlas/domain": "workspace:^",
-    "@effect/platform": "latest",
-    "@effect/platform-node": "latest",
+    "@effect/platform": "0.96.0",
+    "@effect/platform-node": "0.106.0",
     "@oslojs/crypto": "^1.0.1",
-    "effect": "latest",
+    "effect": "3.21.0",
     "jose": "^6.2.2"
   },
   "effect": {
