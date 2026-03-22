@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { generateSecureRandomString } from "../../../../helper/generateSecureRandomString.ts";
+import { generateSecureRandomString } from "../../../../helper/generateSecureRandomString.js";
 
 export const SessionIdBrand = Symbol("@baketsu/louis/model/session/value-object/session-id");
 

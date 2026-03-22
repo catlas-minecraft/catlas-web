@@ -3,42 +3,34 @@ import type { SessionJwt } from "../../../domain/model/session/value-object/sess
 import type { BaseSessionContext, LouisSessionManager } from "../louis-session-manager.ts";
 import type { SessionRepositoryInterface } from "../../../domain/repository.ts";
 import type { UnknownRepositoryError } from "../../../domain/repository-errors.ts";
-import { JwtService } from "./jwt-service.ts";
+import { JwtService } from "./jwt-service.js";
 import type { JwtInvalidError, JwtSignError, JwtVerifyError } from "./jwt-service.ts";
-import { InternalError, InvalidSessionTokenError } from "../../../domain/error.ts";
-import { make as makeLouisSessionManager } from "../louis-session-manager.ts";
-import { parseSessionToken } from "../../../domain/model/session/value-object/session-token.ts";
-import { dateTime2Epoch } from "../../../utils.ts";
+import { InternalError, InvalidSessionTokenError } from "../../../domain/error.js";
+import { make as makeLouisSessionManager } from "../louis-session-manager.js";
+import { parseSessionToken } from "../../../domain/model/session/value-object/session-token.js";
+import { dateTime2Epoch } from "../../../utils.js";
 
-export type SessionUsedResult<OrganizationId extends string, UserId extends string> =
-  | SessionResultNeedRefreshJwt<OrganizationId, UserId>
+export type SessionUsedResult<UserId extends string> =
+  | SessionResultNeedRefreshJwt<UserId>
   | {
-      session: BaseSessionContext<OrganizationId, UserId>;
+      session: BaseSessionContext<UserId>;
       sessionJwt: Option.None<SessionJwt>;
     };
 
-type SessionResultNeedRefreshJwt<OrganizationId extends string, UserId extends string> = {
-  session: BaseSessionContext<OrganizationId, UserId>;
+type SessionResultNeedRefreshJwt<UserId extends string> = {
+  session: BaseSessionContext<UserId>;
   sessionJwt: Option.Some<SessionJwt>;
 };
 
-export interface JwtLouisSessionManager<
-  OrganizationId extends string,
-  UserId extends string,
-> extends LouisSessionManager<OrganizationId, UserId> {
+export interface JwtLouisSessionManager<UserId extends string> extends LouisSessionManager<UserId> {
   createSessionAsJwt: (
-    organizationId: OrganizationId,
     userId: UserId,
-  ) => Effect.Effect<
-    SessionResultNeedRefreshJwt<OrganizationId, UserId>,
-    UnknownRepositoryError | InternalError
-  >;
+  ) => Effect.Effect<SessionResultNeedRefreshJwt<UserId>, UnknownRepositoryError | InternalError>;
 
   useSessionWithJwt: (
     jwt: SessionJwt,
-    organizationId: OrganizationId,
   ) => Effect.Effect<
-    Option.Option<SessionUsedResult<OrganizationId, UserId>>,
+    Option.Option<SessionUsedResult<UserId>>,
     | InternalError
     | JwtVerifyError
     | JwtInvalidError
@@ -59,10 +51,10 @@ export interface JwtLouisSessionManager<
  * JwtLouisSessionManagerを生成する
  */
 export const make = Effect.fn(function* <
-  OrganizationId extends string,
   UserId extends string,
-  SessionRepositoryTag extends SessionRepositoryInterface<OrganizationId, UserId> =
-    SessionRepositoryInterface<OrganizationId, UserId>,
+  SessionRepositoryId,
+  SessionRepositoryService extends SessionRepositoryInterface<UserId> =
+    SessionRepositoryInterface<UserId>,
 >({
   sessionRefreshDuration = Duration.hours(1),
   sessionExpireDuration = Duration.weeks(1),
@@ -70,15 +62,16 @@ export const make = Effect.fn(function* <
 }: {
   sessionRefreshDuration?: Duration.Duration;
   sessionExpireDuration?: Duration.Duration;
-  SessionRepository: Context.Tag<
-    SessionRepositoryTag,
-    SessionRepositoryInterface<OrganizationId, UserId>
-  >;
+  SessionRepository: Context.Tag<SessionRepositoryId, SessionRepositoryService>;
 }) {
   const jwtService = yield* JwtService;
 
   // Base LouisSessionManager implementation
-  const baseManager = yield* makeLouisSessionManager<OrganizationId, UserId, SessionRepositoryTag>({
+  const baseManager = yield* makeLouisSessionManager<
+    UserId,
+    SessionRepositoryId,
+    SessionRepositoryService
+  >({
     sessionRefreshDuration,
     sessionExpireDuration,
     SessionRepository,
@@ -86,14 +79,13 @@ export const make = Effect.fn(function* <
 
   return {
     ...baseManager,
-    createSessionAsJwt: Effect.fn(function* (organizationId: OrganizationId, userId: UserId) {
-      const sessionContext = yield* baseManager.createSession(organizationId, userId);
+    createSessionAsJwt: Effect.fn(function* (userId: UserId) {
+      const sessionContext = yield* baseManager.createSession(userId);
 
       // Create JWT with sessionId as payload
       const sessionJwt = yield* jwtService
         .sign({
           stk: sessionContext.sessionToken,
-          oid: organizationId,
           uid: userId,
           exp: sessionContext.expiresAt.pipe(dateTime2Epoch),
           iat: sessionContext.createdAt.pipe(dateTime2Epoch),
@@ -103,7 +95,6 @@ export const make = Effect.fn(function* <
       return {
         session: {
           sessionId: sessionContext.sessionId,
-          organizationId,
           userId,
           createdAt: sessionContext.createdAt,
           expiresAt: sessionContext.expiresAt,
@@ -111,23 +102,14 @@ export const make = Effect.fn(function* <
         sessionJwt: Option.some(sessionJwt) as Option.Some<SessionJwt>,
       };
     }),
-    useSessionWithJwt: Effect.fn(function* (jwt, organizationId) {
-      const verifyResult: Option.Option<SessionUsedResult<OrganizationId, UserId>> =
-        yield* jwtService.verify(jwt).pipe(
+    useSessionWithJwt: Effect.fn(function* (jwt) {
+      const verifyResult: Option.Option<SessionUsedResult<UserId>> = yield* jwtService
+        .verify(jwt)
+        .pipe(
           Effect.flatMap(
-            Effect.fn(function* ({ stk, oid, uid: sub, iat, exp }) {
+            Effect.fn(function* ({ stk, uid: sub, iat, exp }) {
               if (!iat || !exp) {
-                // If timestamps are missing in JWT, we cannot return a valid session context without DB lookup.
-                // We could fallback to DB here, or return None to force re-verification?
-                // Let's assume valid session JWTs must have timestamps.
-                // If not, we fail verification effectively.
                 return Option.none();
-              }
-
-              if (oid !== organizationId) {
-                return yield* new InvalidSessionTokenError({
-                  message: "Organization ID does not match",
-                });
               }
 
               const { sessionId } = yield* parseSessionToken(stk);
@@ -135,39 +117,36 @@ export const make = Effect.fn(function* <
               return Option.some({
                 session: {
                   sessionId,
-                  organizationId: oid as OrganizationId,
                   userId: sub as UserId,
                   createdAt: DateTime.unsafeMake(iat * 1000), // JWT uses seconds
                   expiresAt: DateTime.unsafeMake(exp * 1000), // JWT uses seconds
                 },
                 sessionJwt: Option.none() as Option.None<SessionJwt>,
-              } satisfies SessionUsedResult<OrganizationId, UserId>);
+              } satisfies SessionUsedResult<UserId>);
             }),
           ),
           Effect.catchTags({
             JwtExpiredError: Effect.fn(function* () {
               const { stk: sessionToken } = yield* jwtService.unsafeDecode(jwt);
 
-              const sessionContext = yield* baseManager.useSession(sessionToken, organizationId);
+              const sessionContext = yield* baseManager.useSession(sessionToken);
 
               if (Option.isNone(sessionContext)) return Option.none();
 
               const newJwt = yield* jwtService.sign({
                 stk: sessionToken,
-                oid: organizationId,
                 uid: sessionContext.value.userId,
               });
 
               return Option.some({
                 session: {
                   sessionId: sessionContext.value.sessionId,
-                  organizationId,
                   userId: sessionContext.value.userId,
                   createdAt: sessionContext.value.createdAt,
                   expiresAt: sessionContext.value.expiresAt,
                 },
                 sessionJwt: Option.some(newJwt) as Option.Some<SessionJwt>,
-              } satisfies SessionResultNeedRefreshJwt<OrganizationId, UserId>);
+              } satisfies SessionResultNeedRefreshJwt<UserId>);
             }),
           }),
         );
@@ -178,5 +157,5 @@ export const make = Effect.fn(function* <
       const { stk } = yield* jwtService.unsafeDecode(jwt);
       yield* baseManager.revokeSession(stk);
     }),
-  } satisfies JwtLouisSessionManager<OrganizationId, UserId>;
+  } satisfies JwtLouisSessionManager<UserId>;
 });

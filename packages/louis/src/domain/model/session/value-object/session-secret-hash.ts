@@ -3,7 +3,7 @@ import { Effect, Either, ParseResult, Schema } from "effect";
 
 import { decodeHex, encodeHex } from "effect/Encoding";
 import type { SessionSecret } from "./mod.ts";
-import { SessionSecretFromString } from "./session-secret.ts";
+import { SessionSecretFromString } from "./session-secret.js";
 
 export const SessionSecretHashBrand = Symbol(
   "@baketsu/louis/model/session/value-object/session-secret-hash",

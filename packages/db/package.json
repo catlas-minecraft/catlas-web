@@ -1,13 +1,13 @@
 {
-  "name": "@catlas/louis",
+  "name": "@catlas/db",
   "version": "0.0.0",
   "type": "module",
   "license": "MIT",
-  "description": "The server template",
+  "description": "Database infrastructure for Catlas",
   "repository": {
     "type": "git",
     "url": "<PLACEHOLDER>",
-    "directory": "packages/louis"
+    "directory": "packages/db"
   },
   "publishConfig": {
     "access": "public",
@@ -24,12 +24,12 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@catlas/domain": "workspace:^",
-    "@effect/platform": "latest",
-    "@effect/platform-node": "latest",
-    "@oslojs/crypto": "^1.0.1",
+    "@effect/sql": "latest",
+    "@effect/sql-kysely": "latest",
+    "@effect/sql-pg": "latest",
     "effect": "latest",
-    "jose": "^6.2.2"
+    "kysely": "^0.28.2",
+    "pg": "^8.16.3"
   },
   "effect": {
     "generateExports": {

@@ -7,7 +7,7 @@
   "repository": {
     "type": "git",
     "url": "<PLACEHOLDER>",
-    "directory": "packages/server"
+    "directory": "packages/api"
   },
   "publishConfig": {
     "access": "public",
@@ -24,10 +24,14 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@catlas/db": "workspace:^",
+    "@catlas/domain": "workspace:^",
+    "@catlas/louis": "workspace:^",
     "@effect/platform": "latest",
     "@effect/platform-node": "latest",
-    "@template/domain": "workspace:^",
-    "effect": "latest"
+    "@effect/sql-kysely": "latest",
+    "effect": "latest",
+    "kysely": "^0.28.14"
   },
   "effect": {
     "generateExports": {
@@ -40,5 +44,8 @@
         "**/*.ts"
       ]
     }
+  },
+  "devDependencies": {
+    "oxfmt": "^0.41.0"
   }
 }

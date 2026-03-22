@@ -22,7 +22,6 @@ export class JwtExpiredError extends Data.TaggedError("JwtExpiredError")<{
 
 export type JwtPayload = {
   stk: SessionToken.SessionToken;
-  oid: string;
   uid: string;
   exp?: number;
   iat?: number;

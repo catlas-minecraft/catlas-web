@@ -10,7 +10,7 @@ import {
   JwtSignError,
   JwtVerifyError,
 } from "../jwt-service.js";
-import { dateTime2Epoch } from "../../../../utils.ts";
+import { dateTime2Epoch } from "../../../../utils.js";
 
 const make = (params: {
   secret: Redacted.Redacted<Uint8Array>;

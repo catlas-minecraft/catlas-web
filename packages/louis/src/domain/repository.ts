@@ -1,31 +1,28 @@
 import type { DateTime, Effect, Option } from "effect";
 import type { SessionId, SessionSecret } from "./model/session/value-object/mod.ts";
-import type { UnknownRepositoryError } from "./repository-errors.js";
+import type { UnknownRepositoryError } from "./repository-errors.ts";
 
-export interface DatabaseSession<OrganizationId extends string, UserId extends string> {
+export interface DatabaseSession<UserId extends string> {
   id: SessionId.SessionId;
   secretHash: Uint8Array;
   userId: UserId;
-  organizationId: OrganizationId;
   expiresAt: DateTime.DateTime;
   nextVerifiedAt: DateTime.DateTime;
   createdAt: DateTime.DateTime;
 }
 
-export interface SessionRepositoryInterface<OrganizationId extends string, UserId extends string> {
+export interface SessionRepositoryInterface<UserId extends string> {
   getSessionAndUser(
     sessionId: SessionId.SessionId,
-  ): Effect.Effect<Option.Option<DatabaseSession<OrganizationId, UserId>>, UnknownRepositoryError>;
+  ): Effect.Effect<Option.Option<DatabaseSession<UserId>>, UnknownRepositoryError>;
 
   getUserSessions(
     userId: UserId,
-    organizationId: OrganizationId,
-  ): Effect.Effect<DatabaseSession<OrganizationId, UserId>[], UnknownRepositoryError>;
+  ): Effect.Effect<DatabaseSession<UserId>[], UnknownRepositoryError>;
 
   setSession(
     id: SessionId.SessionId,
     secret: SessionSecret.SessionSecret,
-    organizationId: OrganizationId,
     userId: UserId,
     createdAt: DateTime.DateTime,
     expiresAt: DateTime.DateTime,
@@ -42,10 +39,7 @@ export interface SessionRepositoryInterface<OrganizationId extends string, UserI
 
   deleteSession(sessionId: SessionId.SessionId): Effect.Effect<void, UnknownRepositoryError>;
 
-  deleteUserSessions(
-    userId: UserId,
-    organizationId: OrganizationId,
-  ): Effect.Effect<void, UnknownRepositoryError>;
+  deleteUserSessions(userId: UserId): Effect.Effect<void, UnknownRepositoryError>;
 
   deleteExpiredSessions(): Effect.Effect<void, UnknownRepositoryError>;
 }

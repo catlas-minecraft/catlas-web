@@ -1,1 +1,1 @@
-export * as UserId from "./user-id.ts";
+export * as UserId from "./user-id.js";

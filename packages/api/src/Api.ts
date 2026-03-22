@@ -1,9 +1,10 @@
 import { HttpApiBuilder } from "@effect/platform"
-import { TodosApi } from "@template/domain/TodosApi"
+import { Api } from "@catlas/domain/Api"
 import { Effect, Layer } from "effect"
+import { AuthLive } from "./auth/AuthHandlers.js"
 import { TodosRepository } from "./TodosRepository.js"
 
-const TodosApiLive = HttpApiBuilder.group(TodosApi, "todos", (handlers) =>
+const TodosApiLive = HttpApiBuilder.group(Api, "todos", (handlers) =>
   Effect.gen(function*() {
     const todos = yield* TodosRepository
     return handlers
@@ -14,6 +15,7 @@ const TodosApiLive = HttpApiBuilder.group(TodosApi, "todos", (handlers) =>
       .handle("removeTodo", ({ path: { id } }) => todos.remove(id))
   }))
 
-export const ApiLive = HttpApiBuilder.api(TodosApi).pipe(
-  Layer.provide(TodosApiLive)
+export const ApiLive = HttpApiBuilder.api(Api).pipe(
+  Layer.provide(TodosApiLive),
+  Layer.provide(AuthLive)
 )

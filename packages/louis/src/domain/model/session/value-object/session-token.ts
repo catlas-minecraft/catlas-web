@@ -1,7 +1,7 @@
-import { Data, Effect, ParseResult, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
-import { SessionSecret, SessionId } from "./mod.ts";
-import { InvalidSessionTokenError } from "../../../error.ts";
+import { SessionSecret, SessionId } from "./mod.js";
+import { InvalidSessionTokenError } from "../../../error.js";
 
 const SessionTokenBrand = Symbol("SessionTokenBrand");
 export const SessionToken = Schema.String.pipe(Schema.brand(SessionTokenBrand));
