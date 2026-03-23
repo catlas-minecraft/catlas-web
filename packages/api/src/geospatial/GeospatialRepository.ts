@@ -1219,32 +1219,31 @@ export const GeospatialRepositoryLive = Layer.effect(
       return [...earliest.values()];
     };
 
-    const restoreNodeSnapshot = (snapshot: any) =>
-      {
-        const mcX = snapshot.mc_x ?? snapshot.geom_json?.x;
-        const mcY = snapshot.mc_y ?? snapshot.geom_json?.y;
-        const mcZ = snapshot.mc_z ?? snapshot.geom_json?.z;
+    const restoreNodeSnapshot = (snapshot: any) => {
+      const mcX = snapshot.mc_x ?? snapshot.geom_json?.x;
+      const mcY = snapshot.mc_y ?? snapshot.geom_json?.y;
+      const mcZ = snapshot.mc_z ?? snapshot.geom_json?.z;
 
-        return coreDb
-          .updateTable("nodes")
-          .set({
-            mc_x: mcX,
-            mc_y: mcY,
-            mc_z: mcZ,
-            feature_type: snapshot.feature_type,
-            tags: snapshot.tags,
-            version: snapshot.version,
-            created_changeset_id: snapshot.created_changeset_id,
-            created_at: new Date(snapshot.created_at),
-            updated_at: new Date(snapshot.updated_at),
-            created_by: snapshot.created_by,
-            updated_by: snapshot.updated_by,
-            deleted_at: snapshot.deleted_at === null ? null : new Date(snapshot.deleted_at),
-            changeset_id: snapshot.changeset_id,
-          })
-          .where("id", "=", snapshot.id)
-          .pipe(runQuery, Effect.asVoid);
-      };
+      return coreDb
+        .updateTable("nodes")
+        .set({
+          mc_x: mcX,
+          mc_y: mcY,
+          mc_z: mcZ,
+          feature_type: snapshot.feature_type,
+          tags: snapshot.tags,
+          version: snapshot.version,
+          created_changeset_id: snapshot.created_changeset_id,
+          created_at: new Date(snapshot.created_at),
+          updated_at: new Date(snapshot.updated_at),
+          created_by: snapshot.created_by,
+          updated_by: snapshot.updated_by,
+          deleted_at: snapshot.deleted_at === null ? null : new Date(snapshot.deleted_at),
+          changeset_id: snapshot.changeset_id,
+        })
+        .where("id", "=", snapshot.id)
+        .pipe(runQuery, Effect.asVoid);
+    };
 
     const restoreWaySnapshot = (snapshot: any) =>
       coreDb
@@ -1338,22 +1337,24 @@ export const GeospatialRepositoryLive = Layer.effect(
           ),
         );
 
-    const createChangeset = (comment: string | null, actorId: string) =>
-      coreDb
-        .insertInto("changesets")
-        .values({
-          status: "open",
-          comment,
-          created_by: actorId,
-          created_at: new Date(),
-        })
-        .returningAll()
-        .pipe(
-          runQuery,
-          Effect.map((rows) => toChangesetSnapshot(rows[0] as ChangeSetRow)),
-        );
+    const createChangeset = Effect.fn("repository.createChangeset")(
+      (comment: string | null, actorId: string) =>
+        coreDb
+          .insertInto("changesets")
+          .values({
+            status: "open",
+            comment,
+            created_by: actorId,
+            created_at: new Date(),
+          })
+          .returningAll()
+          .pipe(
+            runQuery,
+            Effect.map((rows) => toChangesetSnapshot(rows[0] as ChangeSetRow)),
+          ),
+    );
 
-    const publishChangeset = (id: number) =>
+    const publishChangeset = Effect.fn("repository.publishChangeset")((id: number) =>
       db
         .withTransaction(
           ensureOpenChangeset(id).pipe(
@@ -1388,9 +1389,10 @@ export const GeospatialRepositoryLive = Layer.effect(
             ),
           ),
         )
-        .pipe(Effect.mapError(normalizeChangesetLifecycleError));
+        .pipe(Effect.mapError(normalizeChangesetLifecycleError)),
+    );
 
-    const abandonChangeset = (id: number) =>
+    const abandonChangeset = Effect.fn("repository.abandonChangeset")((id: number) =>
       db
         .withTransaction(
           ensureOpenChangeset(id).pipe(
@@ -1592,213 +1594,228 @@ export const GeospatialRepositoryLive = Layer.effect(
             ),
           ),
         )
-        .pipe(Effect.mapError(normalizeChangesetLifecycleError));
+        .pipe(Effect.mapError(normalizeChangesetLifecycleError)),
+    );
 
-    const createNode = (input: {
-      actorId: string;
-      changesetId: number;
-      geom: Point3D;
-      featureType: string;
-      tags: Record<string, string>;
-    }) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(validateTags(input.tags)),
-        Effect.flatMap(() =>
-          coreDb
-            .insertInto("nodes")
-            .values({
-              mc_x: input.geom.x,
-              mc_y: input.geom.y,
-              mc_z: input.geom.z,
-              feature_type: input.featureType,
-              tags: input.tags,
-              version: 1,
-              created_changeset_id: input.changesetId,
-              created_at: new Date(),
-              updated_at: new Date(),
-              changeset_id: input.changesetId,
-              created_by: input.actorId,
-              updated_by: input.actorId,
-            })
-            .returning("id")
-            .pipe(runQuery),
-        ),
-        Effect.flatMap((rows) => loadNodeById(rows[0]!.id)),
-        Effect.map(toNodeSnapshot),
-      );
-
-    const updateNode = (
-      id: number,
-      input: {
+    const createNode = Effect.fn("repository.createNode")(
+      (input: {
         actorId: string;
-        expectedVersion: number;
         changesetId: number;
         geom: Point3D;
         featureType: string;
         tags: Record<string, string>;
-      },
-    ) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(validateTags(input.tags)),
-        Effect.zipRight(loadNodeById(id)),
-        Effect.flatMap((current) =>
-          ensureExpectedVersion("node", id, input.expectedVersion, current.version).pipe(
-            Effect.zipRight(
-              recordNodeVersion(current, input.changesetId).pipe(
-                Effect.zipRight(
-                  coreDb
-                    .updateTable("nodes")
-                    .set({
-                      mc_x: input.geom.x,
-                      mc_y: input.geom.y,
-                      mc_z: input.geom.z,
-                      feature_type: input.featureType,
-                      tags: input.tags,
-                      version: current.version + 1,
-                      updated_at: new Date(),
-                      updated_by: input.actorId,
-                      changeset_id: input.changesetId,
-                    })
-                    .where("id", "=", id)
-                    .pipe(runQuery, Effect.zipRight(loadNodeById(id)), Effect.map(toNodeSnapshot)),
+      }) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(validateTags(input.tags)),
+          Effect.flatMap(() =>
+            coreDb
+              .insertInto("nodes")
+              .values({
+                mc_x: input.geom.x,
+                mc_y: input.geom.y,
+                mc_z: input.geom.z,
+                feature_type: input.featureType,
+                tags: input.tags,
+                version: 1,
+                created_changeset_id: input.changesetId,
+                created_at: new Date(),
+                updated_at: new Date(),
+                changeset_id: input.changesetId,
+                created_by: input.actorId,
+                updated_by: input.actorId,
+              })
+              .returning("id")
+              .pipe(runQuery),
+          ),
+          Effect.flatMap((rows) => loadNodeById(rows[0]!.id)),
+          Effect.map(toNodeSnapshot),
+        ),
+    );
+
+    const updateNode = Effect.fn("repository.updateNode")(
+      (
+        id: number,
+        input: {
+          actorId: string;
+          expectedVersion: number;
+          changesetId: number;
+          geom: Point3D;
+          featureType: string;
+          tags: Record<string, string>;
+        },
+      ) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(validateTags(input.tags)),
+          Effect.zipRight(loadNodeById(id)),
+          Effect.flatMap((current) =>
+            ensureExpectedVersion("node", id, input.expectedVersion, current.version).pipe(
+              Effect.zipRight(
+                recordNodeVersion(current, input.changesetId).pipe(
+                  Effect.zipRight(
+                    coreDb
+                      .updateTable("nodes")
+                      .set({
+                        mc_x: input.geom.x,
+                        mc_y: input.geom.y,
+                        mc_z: input.geom.z,
+                        feature_type: input.featureType,
+                        tags: input.tags,
+                        version: current.version + 1,
+                        updated_at: new Date(),
+                        updated_by: input.actorId,
+                        changeset_id: input.changesetId,
+                      })
+                      .where("id", "=", id)
+                      .pipe(
+                        runQuery,
+                        Effect.zipRight(loadNodeById(id)),
+                        Effect.map(toNodeSnapshot),
+                      ),
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      );
+    );
 
-    const deleteNode = (
-      id: number,
-      input: {
-        actorId: string;
-        expectedVersion: number;
-        changesetId: number;
-      },
-    ) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(loadNodeById(id)),
-        Effect.flatMap((current) =>
-          ensureExpectedVersion("node", id, input.expectedVersion, current.version).pipe(
-            Effect.zipRight(recordNodeVersion(current, input.changesetId)),
-            Effect.zipRight(ensureNodeNotReferenced(id)),
-            Effect.zipRight(
-              coreDb
-                .updateTable("nodes")
-                .set({
-                  deleted_at: new Date(),
-                  updated_at: new Date(),
-                  updated_by: input.actorId,
-                  changeset_id: input.changesetId,
-                  version: current.version + 1,
-                })
-                .where("id", "=", id)
-                .pipe(runQuery, Effect.asVoid),
+    const deleteNode = Effect.fn("repository.deleteNode")(
+      (
+        id: number,
+        input: {
+          actorId: string;
+          expectedVersion: number;
+          changesetId: number;
+        },
+      ) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(loadNodeById(id)),
+          Effect.flatMap((current) =>
+            ensureExpectedVersion("node", id, input.expectedVersion, current.version).pipe(
+              Effect.zipRight(recordNodeVersion(current, input.changesetId)),
+              Effect.zipRight(ensureNodeNotReferenced(id)),
+              Effect.zipRight(
+                coreDb
+                  .updateTable("nodes")
+                  .set({
+                    deleted_at: new Date(),
+                    updated_at: new Date(),
+                    updated_by: input.actorId,
+                    changeset_id: input.changesetId,
+                    version: current.version + 1,
+                  })
+                  .where("id", "=", id)
+                  .pipe(runQuery, Effect.asVoid),
+              ),
             ),
           ),
+          Effect.asVoid,
         ),
-        Effect.asVoid,
-      );
+    );
 
-    const createWay = (input: {
-      actorId: string;
-      changesetId: number;
-      featureType: string;
-      geometryKind: GeometryKind;
-      nodeRefs: ReadonlyArray<number>;
-      tags: Record<string, string>;
-    }) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(validateTags(input.tags)),
-        Effect.zipRight(validateWayNodeRefs(input.nodeRefs, input.geometryKind)),
-        Effect.tap(() => ensureNodesExist(input.nodeRefs)),
-        Effect.flatMap(({ isClosed }) =>
-          coreDb
-            .insertInto("ways")
-            .values({
-              feature_type: input.featureType,
-              geometry_kind: input.geometryKind,
-              is_closed: isClosed,
-              tags: input.tags,
-              version: 1,
-              created_changeset_id: input.changesetId,
-              created_at: new Date(),
-              updated_at: new Date(),
-              changeset_id: input.changesetId,
-              created_by: input.actorId,
-              updated_by: input.actorId,
-            })
-            .returning("id")
-            .pipe(
-              runQuery,
-              Effect.flatMap((rows) => {
-                const wayId = rows[0]!.id;
-
-                return replaceWayNodes(wayId, input.nodeRefs, input.changesetId, 1).pipe(
-                  Effect.zipRight(syncWayGeometry(wayId, input.geometryKind, 1)),
-                  Effect.zipRight(loadWayById(wayId)),
-                  Effect.map(toWaySnapshot),
-                );
-              }),
-            ),
-        ),
-      );
-
-    const updateWay = (
-      id: number,
-      input: {
+    const createWay = Effect.fn("repository.createWay")(
+      (input: {
         actorId: string;
-        expectedVersion: number;
         changesetId: number;
         featureType: string;
         geometryKind: GeometryKind;
         nodeRefs: ReadonlyArray<number>;
         tags: Record<string, string>;
-      },
-    ) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(validateTags(input.tags)),
-        Effect.zipRight(validateWayNodeRefs(input.nodeRefs, input.geometryKind)),
-        Effect.tap(() => ensureNodesExist(input.nodeRefs)),
-        Effect.zipRight(loadWayById(id)),
-        Effect.flatMap((current) =>
-          ensureExpectedVersion("way", id, input.expectedVersion, current.version).pipe(
-            Effect.zipRight(
-              recordWayVersion(current, input.changesetId).pipe(
-                Effect.zipRight(loadWayNodesByWayId(id)),
-                Effect.flatMap((currentWayNodes) =>
-                  recordWayNodeVersions(currentWayNodes, input.changesetId).pipe(
-                    Effect.zipRight(
-                      coreDb
-                        .updateTable("ways")
-                        .set({
-                          feature_type: input.featureType,
-                          geometry_kind: input.geometryKind,
-                          is_closed:
-                            input.nodeRefs[0] === input.nodeRefs[input.nodeRefs.length - 1],
-                          tags: input.tags,
-                          version: current.version + 1,
-                          updated_at: new Date(),
-                          updated_by: input.actorId,
-                          changeset_id: input.changesetId,
-                        })
-                        .where("id", "=", id)
-                        .pipe(
-                          runQuery,
-                          Effect.zipRight(
-                            replaceWayNodes(
-                              id,
-                              input.nodeRefs,
-                              input.changesetId,
-                              current.version + 1,
+      }) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(validateTags(input.tags)),
+          Effect.zipRight(validateWayNodeRefs(input.nodeRefs, input.geometryKind)),
+          Effect.tap(() => ensureNodesExist(input.nodeRefs)),
+          Effect.flatMap(({ isClosed }) =>
+            coreDb
+              .insertInto("ways")
+              .values({
+                feature_type: input.featureType,
+                geometry_kind: input.geometryKind,
+                is_closed: isClosed,
+                tags: input.tags,
+                version: 1,
+                created_changeset_id: input.changesetId,
+                created_at: new Date(),
+                updated_at: new Date(),
+                changeset_id: input.changesetId,
+                created_by: input.actorId,
+                updated_by: input.actorId,
+              })
+              .returning("id")
+              .pipe(
+                runQuery,
+                Effect.flatMap((rows) => {
+                  const wayId = rows[0]!.id;
+
+                  return replaceWayNodes(wayId, input.nodeRefs, input.changesetId, 1).pipe(
+                    Effect.zipRight(syncWayGeometry(wayId, input.geometryKind, 1)),
+                    Effect.zipRight(loadWayById(wayId)),
+                    Effect.map(toWaySnapshot),
+                  );
+                }),
+              ),
+          ),
+        ),
+    );
+
+    const updateWay = Effect.fn("repository.updateWay")(
+      (
+        id: number,
+        input: {
+          actorId: string;
+          expectedVersion: number;
+          changesetId: number;
+          featureType: string;
+          geometryKind: GeometryKind;
+          nodeRefs: ReadonlyArray<number>;
+          tags: Record<string, string>;
+        },
+      ) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(validateTags(input.tags)),
+          Effect.zipRight(validateWayNodeRefs(input.nodeRefs, input.geometryKind)),
+          Effect.tap(() => ensureNodesExist(input.nodeRefs)),
+          Effect.zipRight(loadWayById(id)),
+          Effect.flatMap((current) =>
+            ensureExpectedVersion("way", id, input.expectedVersion, current.version).pipe(
+              Effect.zipRight(
+                recordWayVersion(current, input.changesetId).pipe(
+                  Effect.zipRight(loadWayNodesByWayId(id)),
+                  Effect.flatMap((currentWayNodes) =>
+                    recordWayNodeVersions(currentWayNodes, input.changesetId).pipe(
+                      Effect.zipRight(
+                        coreDb
+                          .updateTable("ways")
+                          .set({
+                            feature_type: input.featureType,
+                            geometry_kind: input.geometryKind,
+                            is_closed:
+                              input.nodeRefs[0] === input.nodeRefs[input.nodeRefs.length - 1],
+                            tags: input.tags,
+                            version: current.version + 1,
+                            updated_at: new Date(),
+                            updated_by: input.actorId,
+                            changeset_id: input.changesetId,
+                          })
+                          .where("id", "=", id)
+                          .pipe(
+                            runQuery,
+                            Effect.zipRight(
+                              replaceWayNodes(
+                                id,
+                                input.nodeRefs,
+                                input.changesetId,
+                                current.version + 1,
+                              ),
                             ),
+                            Effect.zipRight(
+                              syncWayGeometry(id, input.geometryKind, current.version + 1),
+                            ),
+                            Effect.zipRight(loadWayById(id)),
+                            Effect.map(toWaySnapshot),
                           ),
-                          Effect.zipRight(
-                            syncWayGeometry(id, input.geometryKind, current.version + 1),
-                          ),
-                          Effect.zipRight(loadWayById(id)),
-                          Effect.map(toWaySnapshot),
-                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1806,135 +1823,146 @@ export const GeospatialRepositoryLive = Layer.effect(
             ),
           ),
         ),
-      );
+    );
 
-    const deleteWay = (
-      id: number,
-      input: {
-        actorId: string;
-        expectedVersion: number;
-        changesetId: number;
-      },
-    ) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(loadWayById(id)),
-        Effect.flatMap((current) =>
-          ensureExpectedVersion("way", id, input.expectedVersion, current.version).pipe(
-            Effect.zipRight(recordWayVersion(current, input.changesetId)),
-            Effect.zipRight(loadWayNodesByWayId(id)),
-            Effect.flatMap((currentWayNodes) =>
-              recordWayNodeVersions(currentWayNodes, input.changesetId).pipe(
-                Effect.zipRight(ensureWayNotReferenced(id)),
-                Effect.zipRight(
-                  coreDb
-                    .updateTable("ways")
-                    .set({
-                      deleted_at: new Date(),
-                      updated_at: new Date(),
-                      updated_by: input.actorId,
-                      changeset_id: input.changesetId,
-                      version: current.version + 1,
-                    })
-                    .where("id", "=", id)
-                    .pipe(runQuery, Effect.zipRight(deleteWayGeometry(id)), Effect.asVoid),
+    const deleteWay = Effect.fn("repository.deleteWay")(
+      (
+        id: number,
+        input: {
+          actorId: string;
+          expectedVersion: number;
+          changesetId: number;
+        },
+      ) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(loadWayById(id)),
+          Effect.flatMap((current) =>
+            ensureExpectedVersion("way", id, input.expectedVersion, current.version).pipe(
+              Effect.zipRight(recordWayVersion(current, input.changesetId)),
+              Effect.zipRight(loadWayNodesByWayId(id)),
+              Effect.flatMap((currentWayNodes) =>
+                recordWayNodeVersions(currentWayNodes, input.changesetId).pipe(
+                  Effect.zipRight(ensureWayNotReferenced(id)),
+                  Effect.zipRight(
+                    coreDb
+                      .updateTable("ways")
+                      .set({
+                        deleted_at: new Date(),
+                        updated_at: new Date(),
+                        updated_by: input.actorId,
+                        changeset_id: input.changesetId,
+                        version: current.version + 1,
+                      })
+                      .where("id", "=", id)
+                      .pipe(runQuery, Effect.zipRight(deleteWayGeometry(id)), Effect.asVoid),
+                  ),
                 ),
               ),
             ),
           ),
+          Effect.asVoid,
         ),
-        Effect.asVoid,
-      );
+    );
 
-    const createRelation = (input: {
-      actorId: string;
-      changesetId: number;
-      relationType: string;
-      members: ReadonlyArray<RelationMemberInput>;
-      tags: Record<string, string>;
-    }) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(validateTags(input.tags)),
-        Effect.zipRight(ensureRelationMembersExist(input.members)),
-        Effect.flatMap(() =>
-          coreDb
-            .insertInto("relations")
-            .values({
-              relation_type: input.relationType,
-              tags: input.tags,
-              version: 1,
-              created_changeset_id: input.changesetId,
-              created_at: new Date(),
-              updated_at: new Date(),
-              changeset_id: input.changesetId,
-              created_by: input.actorId,
-              updated_by: input.actorId,
-            })
-            .returning("id")
-            .pipe(
-              runQuery,
-              Effect.flatMap((rows) => {
-                const relationId = rows[0]!.id;
-
-                return replaceRelationMembers(relationId, input.members, input.changesetId, 1).pipe(
-                  Effect.zipRight(syncRelationGeometry(relationId, input.relationType, 1)),
-                  Effect.zipRight(loadRelationById(relationId)),
-                  Effect.map(toRelationSnapshot),
-                );
-              }),
-            ),
-        ),
-      );
-
-    const updateRelation = (
-      id: number,
-      input: {
+    const createRelation = Effect.fn("repository.createRelation")(
+      (input: {
         actorId: string;
-        expectedVersion: number;
         changesetId: number;
         relationType: string;
         members: ReadonlyArray<RelationMemberInput>;
         tags: Record<string, string>;
-      },
-    ) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(validateTags(input.tags)),
-        Effect.zipRight(ensureRelationMembersExist(input.members, id)),
-        Effect.zipRight(loadRelationById(id)),
-        Effect.flatMap((current) =>
-          ensureExpectedVersion("relation", id, input.expectedVersion, current.version).pipe(
-            Effect.zipRight(
-              recordRelationVersion(current, input.changesetId).pipe(
-                Effect.zipRight(loadRelationMembersByRelationId(id)),
-                Effect.flatMap((currentMembers) =>
-                  recordRelationMemberVersions(currentMembers, input.changesetId).pipe(
-                    Effect.zipRight(
-                      coreDb
-                        .updateTable("relations")
-                        .set({
-                          relation_type: input.relationType,
-                          tags: input.tags,
-                          version: current.version + 1,
-                          updated_at: new Date(),
-                          updated_by: input.actorId,
-                          changeset_id: input.changesetId,
-                        })
-                        .where("id", "=", id)
-                        .pipe(
-                          runQuery,
-                          Effect.zipRight(
-                            replaceRelationMembers(
-                              id,
-                              input.members,
-                              input.changesetId,
-                              current.version + 1,
+      }) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(validateTags(input.tags)),
+          Effect.zipRight(ensureRelationMembersExist(input.members)),
+          Effect.flatMap(() =>
+            coreDb
+              .insertInto("relations")
+              .values({
+                relation_type: input.relationType,
+                tags: input.tags,
+                version: 1,
+                created_changeset_id: input.changesetId,
+                created_at: new Date(),
+                updated_at: new Date(),
+                changeset_id: input.changesetId,
+                created_by: input.actorId,
+                updated_by: input.actorId,
+              })
+              .returning("id")
+              .pipe(
+                runQuery,
+                Effect.flatMap((rows) => {
+                  const relationId = rows[0]!.id;
+
+                  return replaceRelationMembers(
+                    relationId,
+                    input.members,
+                    input.changesetId,
+                    1,
+                  ).pipe(
+                    Effect.zipRight(syncRelationGeometry(relationId, input.relationType, 1)),
+                    Effect.zipRight(loadRelationById(relationId)),
+                    Effect.map(toRelationSnapshot),
+                  );
+                }),
+              ),
+          ),
+        ),
+    );
+
+    const updateRelation = Effect.fn("repository.updateRelation")(
+      (
+        id: number,
+        input: {
+          actorId: string;
+          expectedVersion: number;
+          changesetId: number;
+          relationType: string;
+          members: ReadonlyArray<RelationMemberInput>;
+          tags: Record<string, string>;
+        },
+      ) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(validateTags(input.tags)),
+          Effect.zipRight(ensureRelationMembersExist(input.members, id)),
+          Effect.zipRight(loadRelationById(id)),
+          Effect.flatMap((current) =>
+            ensureExpectedVersion("relation", id, input.expectedVersion, current.version).pipe(
+              Effect.zipRight(
+                recordRelationVersion(current, input.changesetId).pipe(
+                  Effect.zipRight(loadRelationMembersByRelationId(id)),
+                  Effect.flatMap((currentMembers) =>
+                    recordRelationMemberVersions(currentMembers, input.changesetId).pipe(
+                      Effect.zipRight(
+                        coreDb
+                          .updateTable("relations")
+                          .set({
+                            relation_type: input.relationType,
+                            tags: input.tags,
+                            version: current.version + 1,
+                            updated_at: new Date(),
+                            updated_by: input.actorId,
+                            changeset_id: input.changesetId,
+                          })
+                          .where("id", "=", id)
+                          .pipe(
+                            runQuery,
+                            Effect.zipRight(
+                              replaceRelationMembers(
+                                id,
+                                input.members,
+                                input.changesetId,
+                                current.version + 1,
+                              ),
                             ),
+                            Effect.zipRight(
+                              syncRelationGeometry(id, input.relationType, current.version + 1),
+                            ),
+                            Effect.zipRight(loadRelationById(id)),
+                            Effect.map(toRelationSnapshot),
                           ),
-                          Effect.zipRight(
-                            syncRelationGeometry(id, input.relationType, current.version + 1),
-                          ),
-                          Effect.zipRight(loadRelationById(id)),
-                          Effect.map(toRelationSnapshot),
-                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1942,218 +1970,220 @@ export const GeospatialRepositoryLive = Layer.effect(
             ),
           ),
         ),
-      );
+    );
 
-    const deleteRelation = (
-      id: number,
-      input: {
-        actorId: string;
-        expectedVersion: number;
-        changesetId: number;
-      },
-    ) =>
-      ensureOpenChangeset(input.changesetId).pipe(
-        Effect.zipRight(loadRelationById(id)),
-        Effect.flatMap((current) =>
-          ensureExpectedVersion("relation", id, input.expectedVersion, current.version).pipe(
-            Effect.zipRight(recordRelationVersion(current, input.changesetId)),
-            Effect.zipRight(loadRelationMembersByRelationId(id)),
-            Effect.flatMap((currentMembers) =>
-              recordRelationMemberVersions(currentMembers, input.changesetId).pipe(
-                Effect.zipRight(ensureRelationNotReferenced(id)),
-                Effect.zipRight(
-                  coreDb
-                    .updateTable("relations")
-                    .set({
-                      deleted_at: new Date(),
-                      updated_at: new Date(),
-                      updated_by: input.actorId,
-                      changeset_id: input.changesetId,
-                      version: current.version + 1,
-                    })
-                    .where("id", "=", id)
-                    .pipe(runQuery, Effect.zipRight(deleteRelationGeometry(id)), Effect.asVoid),
+    const deleteRelation = Effect.fn("repository.deleteRelation")(
+      (
+        id: number,
+        input: {
+          actorId: string;
+          expectedVersion: number;
+          changesetId: number;
+        },
+      ) =>
+        ensureOpenChangeset(input.changesetId).pipe(
+          Effect.zipRight(loadRelationById(id)),
+          Effect.flatMap((current) =>
+            ensureExpectedVersion("relation", id, input.expectedVersion, current.version).pipe(
+              Effect.zipRight(recordRelationVersion(current, input.changesetId)),
+              Effect.zipRight(loadRelationMembersByRelationId(id)),
+              Effect.flatMap((currentMembers) =>
+                recordRelationMemberVersions(currentMembers, input.changesetId).pipe(
+                  Effect.zipRight(ensureRelationNotReferenced(id)),
+                  Effect.zipRight(
+                    coreDb
+                      .updateTable("relations")
+                      .set({
+                        deleted_at: new Date(),
+                        updated_at: new Date(),
+                        updated_by: input.actorId,
+                        changeset_id: input.changesetId,
+                        version: current.version + 1,
+                      })
+                      .where("id", "=", id)
+                      .pipe(runQuery, Effect.zipRight(deleteRelationGeometry(id)), Effect.asVoid),
+                  ),
                 ),
               ),
             ),
           ),
+          Effect.asVoid,
         ),
-        Effect.asVoid,
-      );
+    );
 
-    const loadViewport = (input: { bbox: BBox2D; includeRelations: boolean }) =>
-      Effect.gen(function* () {
-        const bbox = toBBox2DInput(input.bbox);
-        const publishedStatus = "published" as const;
+    const loadViewport = Effect.fn("repository.loadViewport")(function* (input: {
+      bbox: BBox2D;
+      includeRelations: boolean;
+    }) {
+      const bbox = toBBox2DInput(input.bbox);
+      const publishedStatus = "published" as const;
 
-        const wayIds = yield* derivedDb
-          .selectFrom("way_geometries")
-          .select("way_geometries.way_id")
-          .where(intersectsBBox2D("bbox", bbox))
-          .pipe(
-            runQuery,
-            Effect.map((rows) => rows.map((row) => row.way_id)),
-          );
-
-        const ways =
-          wayIds.length === 0
-            ? []
-            : yield* coreDb
-                .selectFrom("ways")
-                .innerJoin("changesets", "changesets.id", "ways.changeset_id")
-                .selectAll("ways")
-                .where("ways.deleted_at", "is", null)
-                .where("changesets.status", "=", publishedStatus)
-                .where("ways.id", "in", wayIds)
-                .pipe(runQuery);
-
-        const publishedWayIds = ways.map((row) => row.id);
-
-        const wayNodes =
-          publishedWayIds.length === 0
-            ? []
-            : yield* coreDb
-                .selectFrom("way_nodes")
-                .selectAll()
-                .where("way_id", "in", publishedWayIds)
-                .orderBy("way_id", "asc")
-                .orderBy("seq", "asc")
-                .pipe(runQuery);
-
-        const viewportNodes = yield* coreDb
-          .selectFrom("nodes")
-          .innerJoin("changesets", "changesets.id", "nodes.changeset_id")
-          .select([
-            "nodes.id",
-            "nodes.mc_x",
-            "nodes.mc_y",
-            "nodes.mc_z",
-            "nodes.feature_type",
-            "nodes.tags",
-            "nodes.version",
-            "nodes.created_changeset_id",
-            "nodes.created_at",
-            "nodes.updated_at",
-            "nodes.created_by",
-            "nodes.updated_by",
-            "nodes.deleted_at",
-            "nodes.changeset_id",
-          ])
-          .where("nodes.deleted_at", "is", null)
-          .where("changesets.status", "=", publishedStatus)
-          .where(intersectsBBox2D("nodes.geom_2d", bbox))
-          .pipe(runQuery);
-
-        const nodeIds = new Set<number>([
-          ...viewportNodes.map((row) => row.id),
-          ...wayNodes.map((row) => row.node_id),
-        ]);
-
-        const missingNodeIds = [...nodeIds].filter(
-          (id) => !viewportNodes.some((row) => row.id === id),
+      const wayIds = yield* derivedDb
+        .selectFrom("way_geometries")
+        .select("way_geometries.way_id")
+        .where(intersectsBBox2D("bbox", bbox))
+        .pipe(
+          runQuery,
+          Effect.map((rows) => rows.map((row) => row.way_id)),
         );
 
-        const attachedNodes =
-          missingNodeIds.length === 0
-            ? []
-            : yield* coreDb
-                .selectFrom("nodes")
-                .innerJoin("changesets", "changesets.id", "nodes.changeset_id")
-                .select([
-                  "nodes.id",
-                  "nodes.mc_x",
-                  "nodes.mc_y",
-                  "nodes.mc_z",
-                  "nodes.feature_type",
-                  "nodes.tags",
-                  "nodes.version",
-                  "nodes.created_changeset_id",
-                  "nodes.created_at",
-                  "nodes.updated_at",
-                  "nodes.created_by",
-                  "nodes.updated_by",
-                  "nodes.deleted_at",
-                  "nodes.changeset_id",
-                ])
-                .where("nodes.deleted_at", "is", null)
-                .where("changesets.status", "=", publishedStatus)
-                .where("nodes.id", "in", missingNodeIds)
+      const ways =
+        wayIds.length === 0
+          ? []
+          : yield* coreDb
+              .selectFrom("ways")
+              .innerJoin("changesets", "changesets.id", "ways.changeset_id")
+              .selectAll("ways")
+              .where("ways.deleted_at", "is", null)
+              .where("changesets.status", "=", publishedStatus)
+              .where("ways.id", "in", wayIds)
+              .pipe(runQuery);
+
+      const publishedWayIds = ways.map((row) => row.id);
+
+      const wayNodes =
+        publishedWayIds.length === 0
+          ? []
+          : yield* coreDb
+              .selectFrom("way_nodes")
+              .selectAll()
+              .where("way_id", "in", publishedWayIds)
+              .orderBy("way_id", "asc")
+              .orderBy("seq", "asc")
+              .pipe(runQuery);
+
+      const viewportNodes = yield* coreDb
+        .selectFrom("nodes")
+        .innerJoin("changesets", "changesets.id", "nodes.changeset_id")
+        .select([
+          "nodes.id",
+          "nodes.mc_x",
+          "nodes.mc_y",
+          "nodes.mc_z",
+          "nodes.feature_type",
+          "nodes.tags",
+          "nodes.version",
+          "nodes.created_changeset_id",
+          "nodes.created_at",
+          "nodes.updated_at",
+          "nodes.created_by",
+          "nodes.updated_by",
+          "nodes.deleted_at",
+          "nodes.changeset_id",
+        ])
+        .where("nodes.deleted_at", "is", null)
+        .where("changesets.status", "=", publishedStatus)
+        .where(intersectsBBox2D("nodes.geom_2d", bbox))
+        .pipe(runQuery);
+
+      const nodeIds = new Set<number>([
+        ...viewportNodes.map((row) => row.id),
+        ...wayNodes.map((row) => row.node_id),
+      ]);
+
+      const missingNodeIds = [...nodeIds].filter(
+        (id) => !viewportNodes.some((row) => row.id === id),
+      );
+
+      const attachedNodes =
+        missingNodeIds.length === 0
+          ? []
+          : yield* coreDb
+              .selectFrom("nodes")
+              .innerJoin("changesets", "changesets.id", "nodes.changeset_id")
+              .select([
+                "nodes.id",
+                "nodes.mc_x",
+                "nodes.mc_y",
+                "nodes.mc_z",
+                "nodes.feature_type",
+                "nodes.tags",
+                "nodes.version",
+                "nodes.created_changeset_id",
+                "nodes.created_at",
+                "nodes.updated_at",
+                "nodes.created_by",
+                "nodes.updated_by",
+                "nodes.deleted_at",
+                "nodes.changeset_id",
+              ])
+              .where("nodes.deleted_at", "is", null)
+              .where("changesets.status", "=", publishedStatus)
+              .where("nodes.id", "in", missingNodeIds)
+              .pipe(runQuery);
+
+      const allNodes = [...viewportNodes, ...attachedNodes] as Array<NodeSelectRow>;
+      const wayNodeIds = [...new Set(wayNodes.map((row) => row.node_id))];
+
+      const relationMembers =
+        !input.includeRelations || (publishedWayIds.length === 0 && wayNodeIds.length === 0)
+          ? []
+          : yield* Effect.gen(function* () {
+              const byWay =
+                publishedWayIds.length === 0
+                  ? []
+                  : yield* coreDb
+                      .selectFrom("relation_members")
+                      .innerJoin("relations", "relations.id", "relation_members.relation_id")
+                      .innerJoin("changesets", "changesets.id", "relations.changeset_id")
+                      .selectAll("relation_members")
+                      .where("relations.deleted_at", "is", null)
+                      .where("changesets.status", "=", publishedStatus)
+                      .where("relation_members.member_type", "=", "way")
+                      .where("relation_members.member_id", "in", publishedWayIds)
+                      .pipe(runQuery);
+
+              const byNode =
+                wayNodeIds.length === 0
+                  ? []
+                  : yield* coreDb
+                      .selectFrom("relation_members")
+                      .innerJoin("relations", "relations.id", "relation_members.relation_id")
+                      .innerJoin("changesets", "changesets.id", "relations.changeset_id")
+                      .selectAll("relation_members")
+                      .where("relations.deleted_at", "is", null)
+                      .where("changesets.status", "=", publishedStatus)
+                      .where("relation_members.member_type", "=", "node")
+                      .where("relation_members.member_id", "in", wayNodeIds)
+                      .pipe(runQuery);
+
+              const relationIds = [...new Set([...byWay, ...byNode].map((row) => row.relation_id))];
+
+              if (relationIds.length === 0) {
+                return [] as Array<RelationMemberRow>;
+              }
+
+              return yield* coreDb
+                .selectFrom("relation_members")
+                .selectAll()
+                .where("relation_id", "in", relationIds)
+                .orderBy("relation_id", "asc")
+                .orderBy("seq", "asc")
                 .pipe(runQuery);
+            });
 
-        const allNodes = [...viewportNodes, ...attachedNodes] as Array<NodeSelectRow>;
-        const wayNodeIds = [...new Set(wayNodes.map((row) => row.node_id))];
+      const relationIds = [...new Set(relationMembers.map((row) => row.relation_id))];
 
-        const relationMembers =
-          !input.includeRelations || (publishedWayIds.length === 0 && wayNodeIds.length === 0)
-            ? []
-            : yield* Effect.gen(function* () {
-                const byWay =
-                  publishedWayIds.length === 0
-                    ? []
-                    : yield* coreDb
-                        .selectFrom("relation_members")
-                        .innerJoin("relations", "relations.id", "relation_members.relation_id")
-                        .innerJoin("changesets", "changesets.id", "relations.changeset_id")
-                        .selectAll("relation_members")
-                        .where("relations.deleted_at", "is", null)
-                        .where("changesets.status", "=", publishedStatus)
-                        .where("relation_members.member_type", "=", "way")
-                        .where("relation_members.member_id", "in", publishedWayIds)
-                        .pipe(runQuery);
+      const relations =
+        relationIds.length === 0
+          ? []
+          : yield* coreDb
+              .selectFrom("relations")
+              .innerJoin("changesets", "changesets.id", "relations.changeset_id")
+              .selectAll("relations")
+              .where("relations.deleted_at", "is", null)
+              .where("changesets.status", "=", publishedStatus)
+              .where("relations.id", "in", relationIds)
+              .pipe(runQuery);
 
-                const byNode =
-                  wayNodeIds.length === 0
-                    ? []
-                    : yield* coreDb
-                        .selectFrom("relation_members")
-                        .innerJoin("relations", "relations.id", "relation_members.relation_id")
-                        .innerJoin("changesets", "changesets.id", "relations.changeset_id")
-                        .selectAll("relation_members")
-                        .where("relations.deleted_at", "is", null)
-                        .where("changesets.status", "=", publishedStatus)
-                        .where("relation_members.member_type", "=", "node")
-                        .where("relation_members.member_id", "in", wayNodeIds)
-                        .pipe(runQuery);
-
-                const relationIds = [
-                  ...new Set([...byWay, ...byNode].map((row) => row.relation_id)),
-                ];
-
-                if (relationIds.length === 0) {
-                  return [] as Array<RelationMemberRow>;
-                }
-
-                return yield* coreDb
-                  .selectFrom("relation_members")
-                  .selectAll()
-                  .where("relation_id", "in", relationIds)
-                  .orderBy("relation_id", "asc")
-                  .orderBy("seq", "asc")
-                  .pipe(runQuery);
-              });
-
-        const relationIds = [...new Set(relationMembers.map((row) => row.relation_id))];
-
-        const relations =
-          relationIds.length === 0
-            ? []
-            : yield* coreDb
-                .selectFrom("relations")
-                .innerJoin("changesets", "changesets.id", "relations.changeset_id")
-                .selectAll("relations")
-                .where("relations.deleted_at", "is", null)
-                .where("changesets.status", "=", publishedStatus)
-                .where("relations.id", "in", relationIds)
-                .pipe(runQuery);
-
-        return new ViewportSnapshot({
-          nodes: allNodes.map(toNodeSnapshot),
-          ways: ways.map(toWaySnapshot),
-          wayNodes: wayNodes.map(toWayNodeSnapshot),
-          relations: relations.map(toRelationSnapshot),
-          relationMembers: relationMembers.map(toRelationMemberSnapshot),
-        });
+      return new ViewportSnapshot({
+        nodes: allNodes.map(toNodeSnapshot),
+        ways: ways.map(toWaySnapshot),
+        wayNodes: wayNodes.map(toWayNodeSnapshot),
+        relations: relations.map(toRelationSnapshot),
+        relationMembers: relationMembers.map(toRelationMemberSnapshot),
       });
+    });
 
     return {
       createChangeset,
