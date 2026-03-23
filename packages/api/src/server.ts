@@ -7,6 +7,7 @@ import { DevTools } from "@effect/experimental";
 import { ApiLive } from "./Api.js";
 import { JwtServiceLive } from "./auth/AuthSessionManager.js";
 import { SessionRepositoryLive } from "./auth/KyselySessionRepository.js";
+import { middlewareOpenApi } from "@effect/platform/HttpApiBuilder";
 
 const DevToolsLive = DevTools.layer();
 
@@ -21,6 +22,7 @@ const DocsLive = HttpApiScalar.layer({
 
 const HttpLive = HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
   Layer.provide(DocsLive),
+  Layer.provide(middlewareOpenApi({ path: "/openapi.json" })),
   Layer.provide(ApiLive),
   Layer.provide(SessionRepositoryLive),
   Layer.provide(JwtServiceLive),
