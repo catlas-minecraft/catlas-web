@@ -51,6 +51,7 @@
     "Bbox",
     "Catlas",
     "Geospatial",
-    "Kysely"
+    "Kysely",
+    "moveend"
   ]
 }

@@ -1,0 +1,36 @@
+{
+  "name": "@catlas/viewer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "portless viewer.catlas vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview"
+  },
+  "devDependencies": {
+    "@catlas/leaflet": "workspace:^",
+    "@tailwindcss/vite": "^4.2.2",
+    "@tanstack/devtools-vite": "^0.6.0",
+    "@tanstack/router-plugin": "^1.167.4",
+    "@types/react": "^19.2.14",
+    "@vitejs/plugin-react": "^6.0.1",
+    "portless": "^0.7.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.2",
+    "vite-plus": "^0.1.14",
+    "vite-tsconfig-paths": "^6.1.1"
+  },
+  "dependencies": {
+    "@tanstack/react-devtools": "^0.10.0",
+    "@tanstack/react-query": "^5.95.2",
+    "@tanstack/react-router": "^1.168.3",
+    "@tanstack/react-router-devtools": "^1.166.11",
+    "@types/leaflet": "^1.9.21",
+    "@types/react-dom": "^19.2.3",
+    "leaflet": "^1.9.4",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.2"
+  }
+}
