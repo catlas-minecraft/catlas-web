@@ -133,7 +133,7 @@ export const App = () => {
                 Notes
               </div>
               <p className="text-sidebar-foreground/70">
-                way に属する node は、対応する way が選択されている間だけ表示します。
+                node は常時表示し、way 配下の node は線に馴染む小さめサイズで描画します。
               </p>
             </section>
 

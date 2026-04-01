@@ -657,24 +657,8 @@ export class MapEditor {
     };
   }
 
-  private getVisibleNodeIds(data: NormalizedViewportData, selection: SelectedEntity) {
-    const visibleNodeIds = new Set<number>(data.standaloneNodeIds);
-
-    if (selection?.type === "node") {
-      visibleNodeIds.add(selection.id);
-    }
-
-    if (selection?.type === "way") {
-      const selectedWay = data.renderedWays.get(selection.id);
-
-      if (selectedWay) {
-        for (const nodeId of selectedWay.nodeIds) {
-          visibleNodeIds.add(nodeId);
-        }
-      }
-    }
-
-    return visibleNodeIds;
+  private getVisibleNodeIds(data: NormalizedViewportData) {
+    return new Set<number>(data.nodesById.keys());
   }
 
   private getBaseNode(nodeId: number) {
@@ -781,8 +765,8 @@ export class MapEditor {
       }
     }
 
-    const previousVisibleNodeIds = this.getVisibleNodeIds(data, previousSelection);
-    const nextVisibleNodeIds = this.getVisibleNodeIds(data, nextSelection);
+    const previousVisibleNodeIds = this.getVisibleNodeIds(data);
+    const nextVisibleNodeIds = this.getVisibleNodeIds(data);
 
     for (const nodeId of previousVisibleNodeIds) {
       if (!nextVisibleNodeIds.has(nodeId)) {
@@ -848,10 +832,8 @@ export class MapEditor {
     previousSelection: SelectedEntity,
     nextSelection: SelectedEntity,
   ) {
-    const previousVisibleNodeIds = previousData
-      ? this.getVisibleNodeIds(previousData, previousSelection)
-      : new Set<number>();
-    const nextVisibleNodeIds = this.getVisibleNodeIds(nextData, nextSelection);
+    const previousVisibleNodeIds = previousData ? this.getVisibleNodeIds(previousData) : new Set<number>();
+    const nextVisibleNodeIds = this.getVisibleNodeIds(nextData);
 
     for (const nodeId of previousVisibleNodeIds) {
       if (!nextVisibleNodeIds.has(nodeId)) {
@@ -884,7 +866,7 @@ export class MapEditor {
       return;
     }
 
-    const visibleNodeIds = this.getVisibleNodeIds(data, this.visibleSelection);
+    const visibleNodeIds = this.getVisibleNodeIds(data);
     const selected = this.visibleSelection?.type === "node" && this.visibleSelection.id === nodeId;
     const draggingThisNode = this.activeNodeDrag?.id === nodeId;
 

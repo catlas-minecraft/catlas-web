@@ -47,9 +47,9 @@ const toLatLng = (node: { geom: { x: number; z: number } }) =>
 const createNodeIcon = (selected: boolean) =>
   divIcon({
     className: "catlas-editor-node-marker",
-    html: `<div style="width:${selected ? 18 : 14}px;height:${selected ? 18 : 14}px;border-radius:999px;border:${selected ? 2 : 1}px solid ${selected ? "#f8fafc" : "#0f172a"};background:${selected ? "#10b981" : "#22c55e"};opacity:1;box-shadow:0 0 0 2px rgba(15,23,42,0.18);"></div>`,
-    iconSize: selected ? [18, 18] : [14, 14],
-    iconAnchor: selected ? [9, 9] : [7, 7],
+    html: `<div style="width:${selected ? 12 : 8}px;height:${selected ? 12 : 8}px;border-radius:999px;border:${selected ? 2 : 1}px solid ${selected ? "#f8fafc" : "#0f172a"};background:${selected ? "#10b981" : "#22c55e"};opacity:1;box-shadow:0 0 0 1px rgba(15,23,42,0.16);"></div>`,
+    iconSize: selected ? [12, 12] : [8, 8],
+    iconAnchor: selected ? [6, 6] : [4, 4],
   });
 
 const createNodeLayer = (
