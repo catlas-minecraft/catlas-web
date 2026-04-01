@@ -6,14 +6,21 @@ import { MapEditor, type EditorChanges } from "@/lib/editor/editor";
 import type { SelectedEntity } from "@/lib/editor/viewport-projector";
 
 type ViewportMapEditorProps = {
+  interactionMode?: "browse" | "add-node" | "add-way" | "add-area";
   onStatusChange?: (status: {
     bbox: readonly [number, number, number, number];
     isFetching: boolean;
     error: string | null;
     selectedEntity: SelectedEntity;
     changes: EditorChanges;
+    wayCreation: {
+      id: number;
+      geometryKind: "line" | "area";
+      vertexCount: number;
+    } | null;
   }) => void;
   onRerenderReady?: (rerender: (() => void) | null) => void;
+  onWayCreationReady?: (controls: { finish: () => void; cancel: () => void } | null) => void;
 };
 
 const formatBbox = (map: L.Map) => {
@@ -36,10 +43,17 @@ const fetchViewport = async (bbox: readonly [number, number, number, number]) =>
   return (await response.json()) as ViewportSnapshot;
 };
 
-export const ViewportMapEditor = ({ onStatusChange, onRerenderReady }: ViewportMapEditorProps) => {
+export const ViewportMapEditor = ({
+  interactionMode = "browse",
+  onStatusChange,
+  onRerenderReady,
+  onWayCreationReady,
+}: ViewportMapEditorProps) => {
   const { map } = useLeaflet();
   const editorRef = useRef<MapEditor | null>(null);
-  const [bbox, setBbox] = useState<readonly [number, number, number, number]>(() => formatBbox(map));
+  const [bbox, setBbox] = useState<readonly [number, number, number, number]>(() =>
+    formatBbox(map),
+  );
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity>(null);
   const [changes, setChanges] = useState<EditorChanges>({
     dirtyNodes: [],
@@ -53,19 +67,48 @@ export const ViewportMapEditor = ({ onStatusChange, onRerenderReady }: ViewportM
     });
     editorRef.current = editor;
     onRerenderReady?.(() => editor.rerender());
+    onWayCreationReady?.({
+      finish: () => editor.finishWayCreation(),
+      cancel: () => editor.cancelWayCreation(),
+    });
 
     return () => {
       onRerenderReady?.(null);
+      onWayCreationReady?.(null);
       editor.destroy();
       editorRef.current = null;
     };
-  }, [map, onRerenderReady]);
+  }, [map, onRerenderReady, onWayCreationReady]);
 
   useEffect(() => {
     const handleViewportChange = () => {
       setBbox(formatBbox(map));
     };
-    const handleMapClick = () => {
+    const handleMapClick = (event: L.LeafletMouseEvent) => {
+      if (interactionMode === "add-node") {
+        editorRef.current?.createNodeAt({
+          x: event.latlng.lng,
+          z: event.latlng.lat,
+        });
+        return;
+      }
+
+      if (interactionMode === "add-way") {
+        editorRef.current?.addWayVertexAt({
+          x: event.latlng.lng,
+          z: event.latlng.lat,
+        }, "line");
+        return;
+      }
+
+      if (interactionMode === "add-area") {
+        editorRef.current?.addWayVertexAt({
+          x: event.latlng.lng,
+          z: event.latlng.lat,
+        }, "area");
+        return;
+      }
+
       editorRef.current?.clearSelection();
     };
 
@@ -82,7 +125,7 @@ export const ViewportMapEditor = ({ onStatusChange, onRerenderReady }: ViewportM
         resize: handleViewportChange,
       });
     };
-  }, [map]);
+  }, [interactionMode, map]);
 
   const viewportQuery = useQuery({
     queryKey: ["editor-viewport", bbox],
@@ -105,6 +148,7 @@ export const ViewportMapEditor = ({ onStatusChange, onRerenderReady }: ViewportM
       error: viewportQuery.error instanceof Error ? viewportQuery.error.message : null,
       selectedEntity,
       changes,
+      wayCreation: editorRef.current?.getWayCreationState() ?? null,
     }),
     [bbox, changes, selectedEntity, viewportQuery.error, viewportQuery.isFetching],
   );

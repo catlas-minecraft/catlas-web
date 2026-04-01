@@ -1,4 +1,4 @@
-import type { NodeSnapshot, ViewportSnapshot } from "@catlas/domain";
+import type { NodeSnapshot, ViewportSnapshot, WaySnapshot } from "@catlas/domain";
 import type { Map as LeafletMap } from "leaflet";
 import { LeafletViewportStore } from "./leaflet-viewport-store";
 import type { SelectedEntity } from "./viewport-projector";
@@ -7,11 +7,14 @@ import { normalizeViewportData, type NormalizedViewportData, type RenderedWay } 
 export type EditorChanges = {
   dirtyNodes: Array<{
     id: number;
+    isNew: boolean;
     x: number;
     z: number;
   }>;
   dirtyWays: Array<{
     id: number;
+    isNew: boolean;
+    geometryKind: "line" | "area";
     nodeIds: number[];
   }>;
 };
@@ -26,6 +29,56 @@ type ActiveNodeDrag = {
   id: number;
   coordinate: NodeCoordinate;
 };
+
+type LocalWayDraft = {
+  id: number;
+  nodeIds: number[];
+  way: WaySnapshot;
+};
+
+const createSyntheticTimestamp = () => Date.now();
+
+const createLocalNodeSnapshot = ({
+  id,
+  x,
+  y,
+  z,
+}: {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+}): NodeSnapshot => ({
+  id,
+  geom: { x, y, z },
+  featureType: "editor:new-node",
+  tags: {},
+  version: 0,
+  createdAt: createSyntheticTimestamp(),
+  updatedAt: createSyntheticTimestamp(),
+  createdBy: "editor",
+  updatedBy: "editor",
+  deletedAt: null,
+  changesetId: 0,
+});
+
+const createLocalWaySnapshot = (
+  id: number,
+  geometryKind: "line" | "area",
+): WaySnapshot => ({
+  id,
+  featureType: "editor:new-way",
+  geometryKind,
+  isClosed: geometryKind === "area",
+  tags: {},
+  version: 0,
+  createdAt: createSyntheticTimestamp(),
+  updatedAt: createSyntheticTimestamp(),
+  createdBy: "editor",
+  updatedBy: "editor",
+  deletedAt: null,
+  changesetId: 0,
+});
 
 const sameSelection = (left: SelectedEntity, right: SelectedEntity) =>
   left?.type === right?.type && left?.id === right?.id;
@@ -69,10 +122,15 @@ export class MapEditor {
   private normalizedData: NormalizedViewportData | null = null;
   private selectedEntity: SelectedEntity = null;
   private visibleSelection: SelectedEntity = null;
+  private readonly createdNodesById = new Map<number, NodeSnapshot>();
+  private readonly createdWaysById = new Map<number, LocalWayDraft>();
   private readonly pinnedNodesById = new Map<number, NodeSnapshot>();
   private readonly pinnedWaysById = new Map<number, RenderedWay>();
   private readonly editedNodeCoordinates = new Map<number, NodeCoordinate>();
   private activeNodeDrag: ActiveNodeDrag | null = null;
+  private nextLocalNodeId = -1;
+  private nextLocalWayId = -1;
+  private creatingWay: LocalWayDraft | null = null;
   private readonly store: LeafletViewportStore;
   private readonly onSelectionChange?: (selection: SelectedEntity) => void;
   private readonly onChangesChange?: (changes: EditorChanges) => void;
@@ -149,6 +207,219 @@ export class MapEditor {
     this.emitChangesChange();
   }
 
+  addWayVertexAt(
+    coordinate: { x: number; z: number },
+    geometryKind: "line" | "area" = "line",
+  ) {
+    const nodeId = this.nextLocalNodeId;
+    this.nextLocalNodeId -= 1;
+
+    this.createdNodesById.set(
+      nodeId,
+      createLocalNodeSnapshot({
+        id: nodeId,
+        x: coordinate.x,
+        y: 0,
+        z: coordinate.z,
+      }),
+    );
+    this.editedNodeCoordinates.set(nodeId, {
+      x: coordinate.x,
+      y: 0,
+      z: coordinate.z,
+    });
+
+    if (!this.creatingWay) {
+      const wayId = this.nextLocalWayId;
+      this.nextLocalWayId -= 1;
+      this.creatingWay = {
+        id: wayId,
+        nodeIds: [nodeId],
+        way: createLocalWaySnapshot(wayId, geometryKind),
+      };
+    } else {
+      this.creatingWay = {
+        ...this.creatingWay,
+        nodeIds: [...this.creatingWay.nodeIds, nodeId],
+      };
+    }
+
+    const nextSelection: SelectedEntity = { type: "way", id: this.creatingWay.id };
+
+    if (this.serverData) {
+      const previousData = this.normalizedData;
+      const nextData = this.buildDisplayData(this.serverData);
+      const previousVisibleSelection = this.visibleSelection;
+
+      this.patchWaysFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextSelection,
+      );
+      this.patchNodesFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextSelection,
+      );
+
+      this.normalizedData = nextData;
+      this.visibleSelection = this.resolveSelection(nextData, nextSelection);
+    } else {
+      this.visibleSelection = nextSelection;
+    }
+
+    this.selectedEntity = nextSelection;
+    this.onSelectionChange?.(nextSelection);
+    this.emitChangesChange();
+  }
+
+  finishWayCreation() {
+    if (!this.creatingWay) {
+      return;
+    }
+
+    const minimumVertices = this.creatingWay.way.geometryKind === "area" ? 3 : 2;
+
+    if (this.creatingWay.nodeIds.length < minimumVertices) {
+      this.cancelWayCreation();
+      return;
+    }
+
+    this.createdWaysById.set(this.creatingWay.id, this.creatingWay);
+    this.creatingWay = null;
+
+    if (this.serverData) {
+      const previousData = this.normalizedData;
+      const nextData = this.buildDisplayData(this.serverData);
+      const previousVisibleSelection = this.visibleSelection;
+      const nextVisibleSelection = this.resolveSelection(nextData, this.selectedEntity);
+
+      this.patchWaysFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextVisibleSelection,
+      );
+      this.patchNodesFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextVisibleSelection,
+      );
+
+      this.normalizedData = nextData;
+      this.visibleSelection = nextVisibleSelection;
+    }
+
+    this.emitChangesChange();
+  }
+
+  cancelWayCreation() {
+    if (!this.creatingWay) {
+      return;
+    }
+
+    for (const nodeId of this.creatingWay.nodeIds) {
+      this.createdNodesById.delete(nodeId);
+      this.editedNodeCoordinates.delete(nodeId);
+    }
+
+    this.creatingWay = null;
+
+    if (this.serverData) {
+      const previousData = this.normalizedData;
+      const nextData = this.buildDisplayData(this.serverData);
+      const previousVisibleSelection = this.visibleSelection;
+      const nextVisibleSelection = this.resolveSelection(nextData, this.selectedEntity);
+
+      this.patchWaysFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextVisibleSelection,
+      );
+      this.patchNodesFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextVisibleSelection,
+      );
+
+      this.normalizedData = nextData;
+      this.visibleSelection = nextVisibleSelection;
+    }
+
+    if (this.selectedEntity?.type === "way" && this.selectedEntity.id < 0) {
+      this.selectedEntity = null;
+      this.visibleSelection = null;
+      this.onSelectionChange?.(null);
+    }
+
+    this.emitChangesChange();
+  }
+
+  getWayCreationState() {
+    return this.creatingWay
+      ? {
+          id: this.creatingWay.id,
+          geometryKind: this.creatingWay.way.geometryKind,
+          vertexCount: this.creatingWay.nodeIds.length,
+        }
+      : null;
+  }
+
+  createNodeAt(coordinate: { x: number; z: number }) {
+    const nodeId = this.nextLocalNodeId;
+    this.nextLocalNodeId -= 1;
+
+    this.createdNodesById.set(
+      nodeId,
+      createLocalNodeSnapshot({
+        id: nodeId,
+        x: coordinate.x,
+        y: 0,
+        z: coordinate.z,
+      }),
+    );
+    this.editedNodeCoordinates.set(nodeId, {
+      x: coordinate.x,
+      y: 0,
+      z: coordinate.z,
+    });
+
+    const nextSelection: SelectedEntity = { type: "node", id: nodeId };
+
+    if (this.serverData) {
+      const previousData = this.normalizedData;
+      const nextData = this.buildDisplayData(this.serverData);
+      const previousVisibleSelection = this.visibleSelection;
+
+      this.patchWaysFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextSelection,
+      );
+      this.patchNodesFromViewport(
+        previousData,
+        nextData,
+        previousVisibleSelection,
+        nextSelection,
+      );
+
+      this.normalizedData = nextData;
+      this.visibleSelection = nextSelection;
+    } else {
+      this.visibleSelection = nextSelection;
+    }
+
+    this.selectedEntity = nextSelection;
+    this.onSelectionChange?.(nextSelection);
+    this.emitChangesChange();
+  }
+
   selectNode(id: number) {
     if (!this.normalizedData || !this.normalizedData.nodesById.has(id)) {
       return;
@@ -208,6 +479,9 @@ export class MapEditor {
     this.selectedEntity = null;
     this.visibleSelection = null;
     this.activeNodeDrag = null;
+    this.createdNodesById.clear();
+    this.createdWaysById.clear();
+    this.creatingWay = null;
     this.pinnedNodesById.clear();
     this.pinnedWaysById.clear();
     this.editedNodeCoordinates.clear();
@@ -225,6 +499,7 @@ export class MapEditor {
       .sort(([leftId], [rightId]) => leftId - rightId)
       .map(([id, coordinate]) => ({
         id,
+        isNew: this.createdNodesById.has(id),
         x: coordinate.x,
         z: coordinate.z,
       }));
@@ -251,9 +526,12 @@ export class MapEditor {
           this.normalizedData?.renderedWays.get(id) ??
           this.serverData?.renderedWays.get(id) ??
           this.pinnedWaysById.get(id);
+        const localWay = this.createdWaysById.get(id) ?? (this.creatingWay?.id === id ? this.creatingWay : null);
 
         return {
           id,
+          isNew: this.createdWaysById.has(id) || this.creatingWay?.id === id,
+          geometryKind: localWay?.way.geometryKind ?? renderedWay?.way.geometryKind ?? "line",
           nodeIds: renderedWay ? [...renderedWay.nodeIds] : [],
         };
       });
@@ -289,6 +567,10 @@ export class MapEditor {
       }
     }
 
+    for (const [nodeId, createdNode] of this.createdNodesById) {
+      baseNodesById.set(nodeId, createdNode);
+    }
+
     const nodesById = new Map<number, NodeSnapshot>();
 
     for (const [nodeId, node] of baseNodesById) {
@@ -312,6 +594,30 @@ export class MapEditor {
       if (!wayTemplates.has(wayId)) {
         wayTemplates.set(wayId, cloneRenderedWay(pinnedWay));
       }
+    }
+
+    for (const [wayId, createdWay] of this.createdWaysById) {
+      wayTemplates.set(wayId, {
+        kind:
+          createdWay.way.geometryKind === "area" && createdWay.nodeIds.length >= 3
+            ? "polygon"
+            : "polyline",
+        nodeIds: [...createdWay.nodeIds],
+        way: createdWay.way,
+        coordinates: [],
+      });
+    }
+
+    if (this.creatingWay) {
+      wayTemplates.set(this.creatingWay.id, {
+        kind:
+          this.creatingWay.way.geometryKind === "area" && this.creatingWay.nodeIds.length >= 3
+            ? "polygon"
+            : "polyline",
+        nodeIds: [...this.creatingWay.nodeIds],
+        way: this.creatingWay.way,
+        coordinates: [],
+      });
     }
 
     const renderedWays = new Map<number, RenderedWay>();
@@ -372,7 +678,12 @@ export class MapEditor {
   }
 
   private getBaseNode(nodeId: number) {
-    return this.serverData?.nodesById.get(nodeId) ?? this.pinnedNodesById.get(nodeId) ?? null;
+    return (
+      this.serverData?.nodesById.get(nodeId) ??
+      this.createdNodesById.get(nodeId) ??
+      this.pinnedNodesById.get(nodeId) ??
+      null
+    );
   }
 
   private getEffectiveNode(data: NormalizedViewportData, nodeId: number) {
