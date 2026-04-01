@@ -30,6 +30,16 @@ export class ChangesetSnapshot extends Schema.Class<ChangesetSnapshot>("Changese
   publishedAt: Schema.Union(Schema.Number, Schema.Null)
 }) {}
 
+export class ChangesetCreateResult extends Schema.Class<ChangesetCreateResult>("ChangesetCreateResult")({
+  changesetId: Schema.Number
+}) {}
+
+export class DiffResultEntry extends Schema.Class<DiffResultEntry>("DiffResultEntry")({
+  oldId: Schema.Number,
+  newId: Schema.Number,
+  newVersion: Schema.Number
+}) {}
+
 export class NodeSnapshot extends Schema.Class<NodeSnapshot>("NodeSnapshot")({
   id: Schema.Number,
   geom: Point3D,
@@ -113,6 +123,95 @@ export class RelationMemberInput extends Schema.Class<RelationMemberInput>("Rela
   memberType: Schema.Literal("node", "way", "relation"),
   memberId: Schema.Number,
   role: Schema.Union(Schema.String, Schema.Null)
+}) {}
+
+const uploadNodeCreatePayload = Schema.Struct({
+  id: Schema.Number,
+  geom: Point3D,
+  featureType: Schema.String,
+  tags: Tags
+})
+
+const uploadNodeModifyPayload = Schema.Struct({
+  id: EntityId,
+  expectedVersion: Schema.Number,
+  geom: Point3D,
+  featureType: Schema.String,
+  tags: Tags
+})
+
+const uploadNodeDeletePayload = Schema.Struct({
+  id: EntityId,
+  expectedVersion: Schema.Number
+})
+
+const uploadWayCreatePayload = Schema.Struct({
+  id: Schema.Number,
+  featureType: Schema.String,
+  geometryKind: GeometryKind,
+  nodeRefs: Schema.Array(Schema.Number),
+  tags: Tags
+})
+
+const uploadWayModifyPayload = Schema.Struct({
+  id: EntityId,
+  expectedVersion: Schema.Number,
+  featureType: Schema.String,
+  geometryKind: GeometryKind,
+  nodeRefs: Schema.Array(Schema.Number),
+  tags: Tags
+})
+
+const uploadWayDeletePayload = Schema.Struct({
+  id: EntityId,
+  expectedVersion: Schema.Number
+})
+
+const uploadRelationCreatePayload = Schema.Struct({
+  id: Schema.Number,
+  relationType: Schema.String,
+  members: Schema.Array(RelationMemberInput),
+  tags: Tags
+})
+
+const uploadRelationModifyPayload = Schema.Struct({
+  id: EntityId,
+  expectedVersion: Schema.Number,
+  relationType: Schema.String,
+  members: Schema.Array(RelationMemberInput),
+  tags: Tags
+})
+
+const uploadRelationDeletePayload = Schema.Struct({
+  id: EntityId,
+  expectedVersion: Schema.Number
+})
+
+export class ChangesetUploadRequest extends Schema.Class<ChangesetUploadRequest>("ChangesetUploadRequest")({
+  create: Schema.Struct({
+    nodes: Schema.Array(uploadNodeCreatePayload),
+    ways: Schema.Array(uploadWayCreatePayload),
+    relations: Schema.Array(uploadRelationCreatePayload)
+  }),
+  modify: Schema.Struct({
+    nodes: Schema.Array(uploadNodeModifyPayload),
+    ways: Schema.Array(uploadWayModifyPayload),
+    relations: Schema.Array(uploadRelationModifyPayload)
+  }),
+  delete: Schema.Struct({
+    nodes: Schema.Array(uploadNodeDeletePayload),
+    ways: Schema.Array(uploadWayDeletePayload),
+    relations: Schema.Array(uploadRelationDeletePayload)
+  })
+}) {}
+export type ChangesetUploadPayload = InstanceType<typeof ChangesetUploadRequest>
+
+export class ChangesetUploadDiffResult extends Schema.Class<ChangesetUploadDiffResult>(
+  "ChangesetUploadDiffResult"
+)({
+  nodes: Schema.Array(DiffResultEntry),
+  ways: Schema.Array(DiffResultEntry),
+  relations: Schema.Array(DiffResultEntry)
 }) {}
 
 export class ViewportSnapshot extends Schema.Class<ViewportSnapshot>("ViewportSnapshot")({
@@ -205,8 +304,8 @@ export class ViewportApiGroup extends HttpApiGroup.make("viewport")
 
 export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
   .add(
-    HttpApiEndpoint.post("createChangeset", "/")
-      .addSuccess(ChangesetSnapshot)
+    HttpApiEndpoint.put("createChangesetOsm", "/create")
+      .addSuccess(ChangesetCreateResult)
       .addError(UnauthorizedError, { status: 401 })
       .addError(ValidationError, { status: 400 })
       .addError(GeospatialOperationError, { status: 500 })
@@ -217,17 +316,22 @@ export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
       )
   )
   .add(
-    HttpApiEndpoint.post("publishChangeset")`/${HttpApiSchema.param("id", EntityIdFromString)}/publish`
-      .addSuccess(ChangesetSnapshot)
+    HttpApiEndpoint.post("uploadChangeset")`/${HttpApiSchema.param("id", EntityIdFromString)}/upload`
+      .addSuccess(ChangesetUploadDiffResult)
       .addError(UnauthorizedError, { status: 401 })
       .addError(NotFoundError, { status: 404 })
-      .addError(VersionConflictError, { status: 409 })
       .addError(ChangesetNotOpenError, { status: 409 })
+      .addError(VersionConflictError, { status: 409 })
+      .addError(InvalidTagError, { status: 400 })
+      .addError(InvalidTopologyError, { status: 409 })
+      .addError(InvalidGeometryStateError, { status: 409 })
+      .addError(ValidationError, { status: 400 })
       .addError(GeospatialOperationError, { status: 500 })
+      .setPayload(ChangesetUploadRequest)
   )
   .add(
-    HttpApiEndpoint.post("abandonChangeset")`/${HttpApiSchema.param("id", EntityIdFromString)}/abandon`
-      .addSuccess(ChangesetSnapshot)
+    HttpApiEndpoint.put("closeChangeset")`/${HttpApiSchema.param("id", EntityIdFromString)}/close`
+      .addSuccess(Schema.Void)
       .addError(UnauthorizedError, { status: 401 })
       .addError(NotFoundError, { status: 404 })
       .addError(VersionConflictError, { status: 409 })

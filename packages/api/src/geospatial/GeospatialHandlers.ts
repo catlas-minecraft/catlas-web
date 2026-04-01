@@ -2,6 +2,7 @@ import { Api } from "@catlas/domain/Api";
 import type { BBox2D } from "@catlas/domain/GeospatialApi";
 import {
   BBox2D as BBox2DSchema,
+  ChangesetCreateResult,
   CurrentActor,
   ValidationError,
 } from "@catlas/domain/GeospatialApi";
@@ -58,13 +59,23 @@ export const ChangesetsApiLive = HttpApiBuilder.group(Api, "changesets", (handle
     const repository = yield* GeospatialRepository;
 
     return handlers
-      .handle("createChangeset", ({ payload: { comment } }) =>
+      .handle("createChangesetOsm", ({ payload: { comment } }) =>
         CurrentActor.pipe(
           Effect.flatMap(({ actorId }) => repository.createChangeset(comment, actorId)),
+          Effect.map(
+            (changeset) =>
+              new ChangesetCreateResult({
+                changesetId: changeset.id,
+              }),
+          ),
         ),
       )
-      .handle("publishChangeset", ({ path: { id } }) => repository.publishChangeset(id))
-      .handle("abandonChangeset", ({ path: { id } }) => repository.abandonChangeset(id));
+      .handle("uploadChangeset", ({ path: { id }, payload }) =>
+        CurrentActor.pipe(
+          Effect.flatMap(({ actorId }) => repository.uploadChangeset(id, { actorId, payload })),
+        ),
+      )
+      .handle("closeChangeset", ({ path: { id } }) => repository.closeChangeset(id).pipe(Effect.asVoid));
   }),
 );
 

@@ -1,12 +1,13 @@
 import { useLeaflet } from "../leaflet/context/map.ts";
-import { Control } from "../leaflet/control.tsx";
-import { circleMarker, polygon, polyline, type LatLngTuple } from "leaflet";
-import { useCallback, useEffect, useState } from "react";
+import { type LatLngTuple } from "leaflet";
+import { useCallback, useMemo, useState } from "react";
 import { useLeafletMapEvent } from "../leaflet/hooks/useLeafletEvent.ts";
 import { useQuery } from "@tanstack/react-query";
 
 import { LayerGroup } from "../leaflet/layer/layer-group.tsx";
-import { useLayerGroup } from "../leaflet/layer/context/layerGroup.ts";
+import { CircleMarker } from "../leaflet/layer/path/circle-marker.tsx";
+import { Polygon } from "../leaflet/layer/path/polygon.tsx";
+import { Polyline } from "../leaflet/layer/path/polyline.tsx";
 
 type Point3D = {
   x: number;
@@ -67,8 +68,6 @@ const formatBbox = (map: L.Map) => {
 
 const toLatLng = (geom: Point3D): LatLngTuple => [geom.z, geom.x];
 
-const toFeatureLabel = (featureType: string, id: number) => `${featureType} #${id}`;
-
 export const ViewportLayer = (props: ViewportLayerProps) => {
   return (
     <LayerGroup>
@@ -79,16 +78,15 @@ export const ViewportLayer = (props: ViewportLayerProps) => {
 
 const ViewportLayerInner = ({
   includeRelations = false,
-  url = "//viewport",
+  url = "/viewport",
 }: ViewportLayerProps) => {
   const { map } = useLeaflet();
-  const { layerGroup: vectorLayer } = useLayerGroup();
   const [currentBbox, setCurrentBbox] = useState<readonly [number, number, number, number]>(() =>
     formatBbox(map),
   );
 
   const snapshot = useQuery({
-    queryKey: ["viewport"],
+    queryKey: ["viewport", currentBbox],
     queryFn: async () => {
       const parsedUrl = new URL(url, window.location.href);
       parsedUrl.searchParams.set("bbox", currentBbox.join(","));
@@ -105,106 +103,132 @@ const ViewportLayerInner = ({
 
       return (await response.json()) as ViewportSnapshot;
     },
+    placeholderData: (previousData) => previousData,
   });
 
-  const handleMoveEnd = useCallback(() => {
+  const handleChangeBbox = useCallback(() => {
     const bbox = formatBbox(map);
     setCurrentBbox(bbox);
-  }, []);
+  }, [map]);
 
   useLeafletMapEvent(
     {
-      moveend: handleMoveEnd,
+      moveend: handleChangeBbox,
+      resize: handleChangeBbox,
     },
-    [handleMoveEnd],
+    [handleChangeBbox],
   );
 
-  useEffect(() => {
-    void snapshot.refetch().then(({ data: snapshot }) => {
-      if (snapshot === undefined) return;
+  const layers = useMemo(() => {
+    const layers: {
+      polygons: {
+        id: number;
+        coordinates: LatLngTuple[];
+      }[];
+      polylines: {
+        id: number;
+        coordinates: LatLngTuple[];
+      }[];
+      markers: {
+        id: number;
+        coordinate: LatLngTuple;
+      }[];
+    } = {
+      polygons: [],
+      polylines: [],
+      markers: [],
+    };
+    if (!snapshot.data) {
+      return layers;
+    }
 
-      vectorLayer.clearLayers();
+    const snapshotData = snapshot.data;
 
-      const visibleNodes = snapshot.nodes.filter((node) => node.deletedAt === null);
-      const visibleWays = snapshot.ways.filter((way) => way.deletedAt === null);
+    const visibleNodes = snapshotData.nodes.filter((node) => node.deletedAt === null);
+    const visibleWays = snapshotData.ways.filter((way) => way.deletedAt === null);
 
-      const nodesById = new Map(visibleNodes.map((node) => [node.id, node]));
-      const wayNodesByWayId = new Map<number, WayNodeSnapshot[]>();
-      const usedNodeIds = new Set<number>();
+    const nodesById = new Map(visibleNodes.map((node) => [node.id, node]));
+    const wayNodesByWayId = new Map<number, WayNodeSnapshot[]>();
+    const usedNodeIds = new Set<number>();
 
-      for (const wayNode of snapshot.wayNodes) {
-        const current = wayNodesByWayId.get(wayNode.wayId) ?? [];
-        current.push(wayNode);
-        wayNodesByWayId.set(wayNode.wayId, current);
-      }
+    for (const wayNode of snapshotData.wayNodes) {
+      const current = wayNodesByWayId.get(wayNode.wayId) ?? [];
+      current.push(wayNode);
+      wayNodesByWayId.set(wayNode.wayId, current);
+    }
 
-      for (const way of visibleWays) {
-        const orderedWayNodes = (wayNodesByWayId.get(way.id) ?? []).sort((a, b) => a.seq - b.seq);
-        const coordinates = orderedWayNodes.flatMap((wayNode) => {
-          const node = nodesById.get(wayNode.nodeId);
+    for (const way of visibleWays) {
+      const orderedWayNodes = (wayNodesByWayId.get(way.id) ?? []).sort((a, b) => a.seq - b.seq);
+      const coordinates = orderedWayNodes.flatMap((wayNode) => {
+        const node = nodesById.get(wayNode.nodeId);
 
-          if (!node) {
-            return [];
-          }
-
-          usedNodeIds.add(node.id);
-          return [toLatLng(node.geom)];
-        });
-
-        if (coordinates.length < 2) {
-          continue;
+        if (!node) {
+          return [];
         }
 
-        const layer =
-          way.geometryKind === "area" && coordinates.length >= 3
-            ? polygon(coordinates, {
-                color: "#f97316",
-                weight: 2,
-                fillColor: "#fb923c",
-                fillOpacity: 0.2,
-              })
-            : polyline(coordinates, {
-                color: "#f97316",
-                weight: 3,
-                opacity: 0.95,
-              });
+        usedNodeIds.add(node.id);
+        return [toLatLng(node.geom)];
+      });
 
-        layer.bindTooltip(toFeatureLabel(way.featureType, way.id));
-        layer.addTo(vectorLayer);
+      if (coordinates.length < 2) {
+        continue;
       }
 
-      for (const node of visibleNodes) {
-        const marker = circleMarker(toLatLng(node.geom), {
-          radius: usedNodeIds.has(node.id) ? 3 : 5,
-          color: "#0f172a",
-          weight: 1,
-          fillColor: usedNodeIds.has(node.id) ? "#38bdf8" : "#22c55e",
-          fillOpacity: 0.95,
+      if (way.geometryKind === "area" && coordinates.length >= 3) {
+        layers.polygons.push({
+          id: way.id,
+          coordinates,
         });
-
-        marker.bindTooltip(toFeatureLabel(node.featureType, node.id));
-        marker.addTo(vectorLayer);
+      } else {
+        layers.polylines.push({
+          id: way.id,
+          coordinates,
+        });
       }
-    });
-  }, [vectorLayer, currentBbox]);
+    }
 
-  const relationCount =
-    snapshot.data?.relations.filter((relation) => relation.deletedAt === null).length ?? 0;
+    for (const node of visibleNodes) {
+      layers.markers.push({
+        id: node.id,
+        coordinate: toLatLng(node.geom),
+      });
+    }
+
+    return layers;
+  }, [snapshot.data]);
 
   return (
-    <Control position="topleft">
-      <div className="rounded-md border border-slate-300/80 bg-white/90 px-3 py-2 text-xs text-slate-900 shadow-sm backdrop-blur">
-        <div className="font-medium">Viewport Layer</div>
-        <div>
-          {snapshot.isPending ? "loading..." : "ready"}
-          {snapshot.error ? ` / ${snapshot.error}` : ""}
-        </div>
-        <div>
-          nodes: {snapshot.data?.nodes.length ?? 0} / ways: {snapshot.data?.ways.length ?? 0} /
-          relations: {relationCount}
-        </div>
-        <div className="max-w-72 truncate text-slate-600">bbox: {currentBbox || "-"}</div>
-      </div>
-    </Control>
+    <>
+      {layers.polygons.map(({ id, coordinates }) => (
+        <Polygon
+          key={`polygon-${id}`}
+          positions={coordinates}
+          color={"#f97316"}
+          weight={2}
+          fillColor="#fb923c"
+          fillOpacity={0.2}
+        />
+      ))}
+      {layers.polylines.map(({ id, coordinates }) => (
+        <Polyline
+          key={`polyline-${id}`}
+          positions={coordinates}
+          color={"#f97316"}
+          weight={3}
+          opacity={0.95}
+        />
+      ))}
+      {layers.markers.map(({ id, coordinate }) => (
+        <CircleMarker
+          key={`marker-${id}`}
+          position={coordinate}
+          radius={5}
+          color={"#0f172a"}
+          weight={1}
+          fillColor={"#22c55e"}
+          fillOpacity={0.95}
+        />
+      ))}
+    </>
   );
 };

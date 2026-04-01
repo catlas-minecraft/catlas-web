@@ -13,7 +13,10 @@ export default defineConfig({
     port: Number(process.env.PORT),
     proxy: {
       "/openapi.json": "http://api.catlas.localhost:1355",
-      "/viewport": "http://api.catlas.localhost:1355",
+      "/viewport": {
+        target: "http://api.catlas.localhost:1355",
+        changeOrigin: true,
+      },
     },
   },
   plugins: [

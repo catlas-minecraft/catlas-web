@@ -1,4 +1,4 @@
-import { cn } from "../lib/util.ts";
+import { cn } from "../lib/utils.ts";
 import { LeafletContext } from "./context/map.ts";
 import { ParentContext } from "./context/parent.ts";
 import { useLeafletMap } from "./hooks/useLeaflet.ts";

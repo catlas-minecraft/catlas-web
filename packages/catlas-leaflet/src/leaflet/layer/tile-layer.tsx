@@ -6,7 +6,7 @@ export interface CTileLayerProps extends TileLayerOptions {
 }
 
 export const CTileLayer = ({ urlTemplate, ...options }: CTileLayerProps): null => {
-  useLayerLifecycleRef(() => tileLayer(urlTemplate, options), []);
+  useLayerLifecycleRef(() => tileLayer(urlTemplate, options));
 
   return null;
 };

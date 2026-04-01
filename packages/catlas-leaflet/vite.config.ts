@@ -1,6 +1,10 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  server: {
+    host: process.env.HOST,
+    port: Number(process.env.PORT),
+  },
   pack: {
     entry: ["src/index.ts"],
     dts: {

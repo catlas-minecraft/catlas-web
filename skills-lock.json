@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "1d66cf82f78d60a21b90375ebe4fa03a202ffb77819def2cd371e629398adf59"
     },
+    "react-doctor": {
+      "source": "millionco/react-doctor",
+      "sourceType": "github",
+      "computedHash": "efa8db174b3c60e27b34d76842e3a9a7c0e5e602fd4d66eec897372d0ce3f30b"
+    },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",

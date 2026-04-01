@@ -17,4 +17,4 @@ scratchpad/*
 .env.production.local
 
 
-packages/catlas-viewer/public/tiles
+packages/*/public/tiles

@@ -6,18 +6,13 @@ import {
   makeGeometryBBox,
   makeMultipolygonRelationGeometry,
   makeWayGeometry,
-  type NodeVersionSnapshot as NodeVersionSnapshotRecord,
-  type RelationMemberVersionSnapshot as RelationMemberVersionSnapshotRecord,
   type RelationGeometryRow,
   RESERVED_TAG_KEYS,
   type RelationMemberRow,
   type RelationRow,
-  type RelationVersionSnapshot as RelationVersionSnapshotRecord,
-  type WayNodeVersionSnapshot as WayNodeVersionSnapshotRecord,
   type WayGeometryRow,
   type WayNodeRow,
   type WayRow,
-  type WayVersionSnapshot as WayVersionSnapshotRecord,
   intersectsBBox2D,
   withCoreSchema,
   withDerivedSchema,
@@ -25,8 +20,11 @@ import {
 } from "@catlas/db";
 import {
   type BBox2D,
+  ChangesetUploadDiffResult,
+  type ChangesetUploadPayload,
   ChangesetNotOpenError,
   ChangesetSnapshot,
+  DiffResultEntry,
   GeospatialOperationError,
   type GeometryKind,
   InvalidGeometryStateError,
@@ -36,7 +34,7 @@ import {
   NodeSnapshot,
   NotFoundError,
   Point3D,
-  type RelationMemberInput,
+  RelationMemberInput,
   RelationDetailSnapshot,
   RelationMemberSnapshot,
   RelationSnapshot,
@@ -75,13 +73,23 @@ export interface GeospatialRepositoryService {
     comment: string | null,
     actorId: string,
   ) => Effect.Effect<ChangesetSnapshot, GeospatialOperationError>;
-  publishChangeset: (
+  uploadChangeset: (
     id: number,
+    input: {
+      actorId: string;
+      payload: ChangesetUploadPayload;
+    },
   ) => Effect.Effect<
-    ChangesetSnapshot,
-    NotFoundError | ChangesetNotOpenError | VersionConflictError | GeospatialOperationError
+    ChangesetUploadDiffResult,
+    | NotFoundError
+    | VersionConflictError
+    | ChangesetNotOpenError
+    | InvalidTagError
+    | InvalidTopologyError
+    | InvalidGeometryStateError
+    | GeospatialOperationError
   >;
-  abandonChangeset: (
+  closeChangeset: (
     id: number,
   ) => Effect.Effect<
     ChangesetSnapshot,
@@ -264,6 +272,33 @@ const normalizeChangesetLifecycleError = (error: unknown) => {
       tag === "GeospatialOperationError"
     ) {
       return error as NotFoundError | ChangesetNotOpenError | GeospatialOperationError;
+    }
+  }
+
+  return toOperationError(error);
+};
+
+const normalizeChangesetUploadError = (error: unknown) => {
+  if (typeof error === "object" && error !== null && "_tag" in error) {
+    const tag = (error as { _tag?: unknown })._tag;
+
+    if (
+      tag === "NotFoundError" ||
+      tag === "ChangesetNotOpenError" ||
+      tag === "VersionConflictError" ||
+      tag === "InvalidTagError" ||
+      tag === "InvalidTopologyError" ||
+      tag === "InvalidGeometryStateError" ||
+      tag === "GeospatialOperationError"
+    ) {
+      return error as
+        | NotFoundError
+        | ChangesetNotOpenError
+        | VersionConflictError
+        | InvalidTagError
+        | InvalidTopologyError
+        | InvalidGeometryStateError
+        | GeospatialOperationError;
     }
   }
 
@@ -1189,11 +1224,6 @@ export const GeospatialRepositoryLive = Layer.effect(
         { discard: true },
       );
 
-    const clearRelationGeometries = (relationIds: ReadonlyArray<number>) =>
-      Effect.forEach(relationIds, (relationId) => deleteRelationGeometry(relationId), {
-        discard: true,
-      });
-
     const refreshRelationGeometries = (relationIds: ReadonlyArray<number>) =>
       Effect.forEach(
         relationIds,
@@ -1214,154 +1244,6 @@ export const GeospatialRepositoryLive = Layer.effect(
         { discard: true },
       );
 
-    const pickEarliestSnapshots = <T extends { version: number }, K extends string | number>(
-      rows: ReadonlyArray<T>,
-      keyOf: (row: T) => K,
-    ) => {
-      const earliest = new Map<K, T>();
-
-      for (const row of rows) {
-        const key = keyOf(row);
-        const current = earliest.get(key);
-
-        if (current === undefined || row.version < current.version) {
-          earliest.set(key, row);
-        }
-      }
-
-      return [...earliest.values()];
-    };
-
-    const getSnapshotNodeCoordinates = (snapshot: NodeVersionSnapshotRecord) => {
-      const mcX = snapshot.mc_x ?? snapshot.geom_json?.x;
-      const mcY = snapshot.mc_y ?? snapshot.geom_json?.y;
-      const mcZ = snapshot.mc_z ?? snapshot.geom_json?.z;
-
-      return { mcX, mcY, mcZ };
-    };
-
-    const restoreNodeSnapshot = (snapshot: NodeVersionSnapshotRecord) => {
-      const { mcX, mcY, mcZ } = getSnapshotNodeCoordinates(snapshot);
-
-      return coreDb
-        .updateTable("nodes")
-        .set({
-          mc_x: mcX,
-          mc_y: mcY,
-          mc_z: mcZ,
-          feature_type: snapshot.feature_type,
-          tags: snapshot.tags,
-          version: snapshot.version,
-          created_changeset_id: snapshot.created_changeset_id,
-          created_at: new Date(snapshot.created_at),
-          updated_at: new Date(snapshot.updated_at),
-          created_by: snapshot.created_by,
-          updated_by: snapshot.updated_by,
-          deleted_at: snapshot.deleted_at === null ? null : new Date(snapshot.deleted_at),
-          changeset_id: snapshot.changeset_id,
-        })
-        .where("id", "=", snapshot.id)
-        .pipe(runQuery, Effect.asVoid);
-    };
-
-    const restoreWaySnapshot = (snapshot: WayVersionSnapshotRecord) =>
-      coreDb
-        .updateTable("ways")
-        .set({
-          feature_type: snapshot.feature_type,
-          geometry_kind: snapshot.geometry_kind,
-          is_closed: snapshot.is_closed,
-          tags: snapshot.tags,
-          version: snapshot.version,
-          created_changeset_id: snapshot.created_changeset_id,
-          created_at: new Date(snapshot.created_at),
-          updated_at: new Date(snapshot.updated_at),
-          created_by: snapshot.created_by,
-          updated_by: snapshot.updated_by,
-          deleted_at: snapshot.deleted_at === null ? null : new Date(snapshot.deleted_at),
-          changeset_id: snapshot.changeset_id,
-        })
-        .where("id", "=", snapshot.id)
-        .pipe(runQuery, Effect.asVoid);
-
-    const restoreWayNodeSnapshots = (
-      wayId: number,
-      snapshots: ReadonlyArray<WayNodeVersionSnapshotRecord>,
-    ) =>
-      coreDb
-        .deleteFrom("way_nodes")
-        .where("way_id", "=", wayId)
-        .pipe(
-          runQuery,
-          Effect.zipRight(
-            Effect.forEach(
-              snapshots,
-              (snapshot) =>
-                coreDb
-                  .insertInto("way_nodes")
-                  .values({
-                    id: snapshot.id,
-                    way_id: snapshot.way_id,
-                    node_id: snapshot.node_id,
-                    seq: snapshot.seq,
-                    version: snapshot.version,
-                    changeset_id: snapshot.changeset_id,
-                  })
-                  .pipe(runQuery, Effect.asVoid),
-              { discard: true },
-            ),
-          ),
-        );
-
-    const restoreRelationSnapshot = (snapshot: RelationVersionSnapshotRecord) =>
-      coreDb
-        .updateTable("relations")
-        .set({
-          relation_type: snapshot.relation_type,
-          tags: snapshot.tags,
-          version: snapshot.version,
-          created_changeset_id: snapshot.created_changeset_id,
-          created_at: new Date(snapshot.created_at),
-          updated_at: new Date(snapshot.updated_at),
-          created_by: snapshot.created_by,
-          updated_by: snapshot.updated_by,
-          deleted_at: snapshot.deleted_at === null ? null : new Date(snapshot.deleted_at),
-          changeset_id: snapshot.changeset_id,
-        })
-        .where("id", "=", snapshot.id)
-        .pipe(runQuery, Effect.asVoid);
-
-    const restoreRelationMemberSnapshots = (
-      relationId: number,
-      snapshots: ReadonlyArray<RelationMemberVersionSnapshotRecord>,
-    ) =>
-      coreDb
-        .deleteFrom("relation_members")
-        .where("relation_id", "=", relationId)
-        .pipe(
-          runQuery,
-          Effect.zipRight(
-            Effect.forEach(
-              snapshots,
-              (snapshot) =>
-                coreDb
-                  .insertInto("relation_members")
-                  .values({
-                    id: snapshot.id,
-                    relation_id: snapshot.relation_id,
-                    member_type: snapshot.member_type,
-                    member_id: snapshot.member_id,
-                    seq: snapshot.seq,
-                    role: snapshot.role,
-                    version: snapshot.version,
-                    changeset_id: snapshot.changeset_id,
-                  })
-                  .pipe(runQuery, Effect.asVoid),
-              { discard: true },
-            ),
-          ),
-        );
-
     const createChangeset = Effect.fn("repository.createChangeset")(
       (comment: string | null, actorId: string) =>
         coreDb
@@ -1377,6 +1259,205 @@ export const GeospatialRepositoryLive = Layer.effect(
             runQuery,
             Effect.map((rows) => toChangesetSnapshot(rows[0] as ChangeSetRow)),
           ),
+    );
+
+    const uploadChangeset = Effect.fn("repository.uploadChangeset")(
+      (id: number, input: { actorId: string; payload: ChangesetUploadPayload }) =>
+        db.withTransaction(
+          Effect.gen(function* () {
+            const nodeIdMap = new Map<number, number>();
+            const wayIdMap = new Map<number, number>();
+            const relationIdMap = new Map<number, number>();
+
+            const nodeDiffs: Array<DiffResultEntry> = [];
+            const wayDiffs: Array<DiffResultEntry> = [];
+            const relationDiffs: Array<DiffResultEntry> = [];
+
+            const resolveMappedId = (value: number, idMap: Map<number, number>) =>
+              idMap.get(value) ?? value;
+
+            const resolveRelationMember = (member: RelationMemberInput): RelationMemberInput =>
+              new RelationMemberInput({
+                ...member,
+                memberId:
+                  member.memberType === "node"
+                    ? resolveMappedId(member.memberId, nodeIdMap)
+                    : member.memberType === "way"
+                      ? resolveMappedId(member.memberId, wayIdMap)
+                      : resolveMappedId(member.memberId, relationIdMap),
+              });
+
+            for (const node of input.payload.create.nodes) {
+              const created = yield* createNode({
+                actorId: input.actorId,
+                changesetId: id,
+                geom: node.geom,
+                featureType: node.featureType,
+                tags: node.tags,
+              });
+
+              nodeIdMap.set(node.id, created.id);
+              nodeDiffs.push(
+                new DiffResultEntry({
+                  oldId: node.id,
+                  newId: created.id,
+                  newVersion: created.version,
+                }),
+              );
+            }
+
+            for (const way of input.payload.create.ways) {
+              const created = yield* createWay({
+                actorId: input.actorId,
+                changesetId: id,
+                featureType: way.featureType,
+                geometryKind: way.geometryKind,
+                nodeRefs: way.nodeRefs.map((nodeRef) => resolveMappedId(nodeRef, nodeIdMap)),
+                tags: way.tags,
+              });
+
+              wayIdMap.set(way.id, created.id);
+              wayDiffs.push(
+                new DiffResultEntry({
+                  oldId: way.id,
+                  newId: created.id,
+                  newVersion: created.version,
+                }),
+              );
+            }
+
+            for (const relation of input.payload.create.relations) {
+              const created = yield* createRelation({
+                actorId: input.actorId,
+                changesetId: id,
+                relationType: relation.relationType,
+                members: relation.members.map(resolveRelationMember),
+                tags: relation.tags,
+              });
+
+              relationIdMap.set(relation.id, created.id);
+              relationDiffs.push(
+                new DiffResultEntry({
+                  oldId: relation.id,
+                  newId: created.id,
+                  newVersion: created.version,
+                }),
+              );
+            }
+
+            for (const node of input.payload.modify.nodes) {
+              const updated = yield* updateNode(node.id, {
+                actorId: input.actorId,
+                expectedVersion: node.expectedVersion,
+                changesetId: id,
+                geom: node.geom,
+                featureType: node.featureType,
+                tags: node.tags,
+              });
+
+              nodeDiffs.push(
+                new DiffResultEntry({
+                  oldId: node.id,
+                  newId: updated.id,
+                  newVersion: updated.version,
+                }),
+              );
+            }
+
+            for (const way of input.payload.modify.ways) {
+              const updated = yield* updateWay(way.id, {
+                actorId: input.actorId,
+                expectedVersion: way.expectedVersion,
+                changesetId: id,
+                featureType: way.featureType,
+                geometryKind: way.geometryKind,
+                nodeRefs: way.nodeRefs.map((nodeRef) => resolveMappedId(nodeRef, nodeIdMap)),
+                tags: way.tags,
+              });
+
+              wayDiffs.push(
+                new DiffResultEntry({
+                  oldId: way.id,
+                  newId: updated.id,
+                  newVersion: updated.version,
+                }),
+              );
+            }
+
+            for (const relation of input.payload.modify.relations) {
+              const updated = yield* updateRelation(relation.id, {
+                actorId: input.actorId,
+                expectedVersion: relation.expectedVersion,
+                changesetId: id,
+                relationType: relation.relationType,
+                members: relation.members.map(resolveRelationMember),
+                tags: relation.tags,
+              });
+
+              relationDiffs.push(
+                new DiffResultEntry({
+                  oldId: relation.id,
+                  newId: updated.id,
+                  newVersion: updated.version,
+                }),
+              );
+            }
+
+            for (const relation of input.payload.delete.relations) {
+              yield* deleteRelation(relation.id, {
+                actorId: input.actorId,
+                expectedVersion: relation.expectedVersion,
+                changesetId: id,
+              });
+
+              relationDiffs.push(
+                new DiffResultEntry({
+                  oldId: relation.id,
+                  newId: relation.id,
+                  newVersion: relation.expectedVersion + 1,
+                }),
+              );
+            }
+
+            for (const way of input.payload.delete.ways) {
+              yield* deleteWay(way.id, {
+                actorId: input.actorId,
+                expectedVersion: way.expectedVersion,
+                changesetId: id,
+              });
+
+              wayDiffs.push(
+                new DiffResultEntry({
+                  oldId: way.id,
+                  newId: way.id,
+                  newVersion: way.expectedVersion + 1,
+                }),
+              );
+            }
+
+            for (const node of input.payload.delete.nodes) {
+              yield* deleteNode(node.id, {
+                actorId: input.actorId,
+                expectedVersion: node.expectedVersion,
+                changesetId: id,
+              });
+
+              nodeDiffs.push(
+                new DiffResultEntry({
+                  oldId: node.id,
+                  newId: node.id,
+                  newVersion: node.expectedVersion + 1,
+                }),
+              );
+            }
+
+            return new ChangesetUploadDiffResult({
+              nodes: nodeDiffs,
+              ways: wayDiffs,
+              relations: relationDiffs,
+            });
+          }),
+        ).pipe(Effect.mapError(normalizeChangesetUploadError)),
     );
 
     const getNode = Effect.fn("repository.getNode")((id: number) =>
@@ -1416,7 +1497,7 @@ export const GeospatialRepositoryLive = Layer.effect(
       }),
     );
 
-    const publishChangeset = Effect.fn("repository.publishChangeset")((id: number) =>
+    const closeChangeset = Effect.fn("repository.closeChangeset")((id: number) =>
       db
         .withTransaction(
           ensureOpenChangeset(id).pipe(
@@ -1440,211 +1521,6 @@ export const GeospatialRepositoryLive = Layer.effect(
                   .set({
                     status: "published",
                     published_at: new Date(),
-                  })
-                  .where("id", "=", id)
-                  .returningAll()
-                  .pipe(
-                    runQuery,
-                    Effect.map((rows) => toChangesetSnapshot(rows[0] as ChangeSetRow)),
-                  );
-              }),
-            ),
-          ),
-        )
-        .pipe(Effect.mapError(normalizeChangesetLifecycleError)),
-    );
-
-    const abandonChangeset = Effect.fn("repository.abandonChangeset")((id: number) =>
-      db
-        .withTransaction(
-          ensureOpenChangeset(id).pipe(
-            Effect.flatMap(() =>
-              Effect.gen(function* () {
-                const touchedNodeVersions = yield* collectTouchedNodeVersions(id);
-                const touchedWayVersions = yield* collectTouchedWayVersions(id);
-                const touchedRelationVersions = yield* collectTouchedRelationVersions(id);
-                const rollbackWayIds = yield* collectChangedWayIds(id);
-                const touchedRelationIds = yield* collectTouchedRelationIds(id, rollbackWayIds);
-
-                yield* ensureDraftOwnership("node", id, touchedNodeVersions);
-                yield* ensureDraftOwnership("way", id, touchedWayVersions);
-                yield* ensureDraftOwnership("relation", id, touchedRelationVersions);
-
-                const createdRelations = yield* coreDb
-                  .selectFrom("relations")
-                  .select(["id"])
-                  .where("changeset_id", "=", id)
-                  .where("created_changeset_id", "=", id)
-                  .pipe(runQuery);
-
-                const createdWays = yield* coreDb
-                  .selectFrom("ways")
-                  .select(["id"])
-                  .where("changeset_id", "=", id)
-                  .where("created_changeset_id", "=", id)
-                  .pipe(runQuery);
-
-                const createdNodes = yield* coreDb
-                  .selectFrom("nodes")
-                  .select(["id"])
-                  .where("changeset_id", "=", id)
-                  .where("created_changeset_id", "=", id)
-                  .pipe(runQuery);
-
-                const createdRelationIds = new Set(createdRelations.map((row) => row.id));
-                const createdWayIds = new Set(createdWays.map((row) => row.id));
-                const createdNodeIds = new Set(createdNodes.map((row) => row.id));
-
-                const relationVersionRows = yield* historyDb
-                  .selectFrom("relation_versions")
-                  .selectAll()
-                  .where("changeset_id", "=", id)
-                  .pipe(runQuery);
-                const relationSnapshots = pickEarliestSnapshots(
-                  relationVersionRows,
-                  (row) => row.relation_id,
-                )
-                  .map((row) => row.snapshot)
-                  .filter((snapshot) => !createdRelationIds.has(snapshot.id));
-
-                const relationMemberVersionRows = yield* historyDb
-                  .selectFrom("relation_member_versions")
-                  .selectAll()
-                  .where("changeset_id", "=", id)
-                  .pipe(runQuery);
-                const relationMemberSnapshots = pickEarliestSnapshots(
-                  relationMemberVersionRows,
-                  (row) => row.relation_member_id,
-                )
-                  .map((row) => row.snapshot)
-                  .filter((snapshot) => snapshot.changeset_id !== id);
-
-                const wayVersionRows = yield* historyDb
-                  .selectFrom("way_versions")
-                  .selectAll()
-                  .where("changeset_id", "=", id)
-                  .pipe(runQuery);
-                const waySnapshots = pickEarliestSnapshots(wayVersionRows, (row) => row.way_id)
-                  .map((row) => row.snapshot)
-                  .filter((snapshot) => !createdWayIds.has(snapshot.id));
-
-                const wayNodeVersionRows = yield* historyDb
-                  .selectFrom("way_node_versions")
-                  .selectAll()
-                  .where("changeset_id", "=", id)
-                  .pipe(runQuery);
-                const wayNodeSnapshots = pickEarliestSnapshots(
-                  wayNodeVersionRows,
-                  (row) => row.way_node_id,
-                )
-                  .map((row) => row.snapshot)
-                  .filter((snapshot) => snapshot.changeset_id !== id);
-
-                const nodeVersionRows = yield* historyDb
-                  .selectFrom("node_versions")
-                  .selectAll()
-                  .where("changeset_id", "=", id)
-                  .pipe(runQuery);
-                const nodeSnapshots = pickEarliestSnapshots(nodeVersionRows, (row) => row.node_id)
-                  .map((row) => row.snapshot)
-                  .filter((snapshot) => !createdNodeIds.has(snapshot.id));
-
-                const relationIdsToReset = [
-                  ...new Set([
-                    ...createdRelations.map((row) => row.id),
-                    ...relationSnapshots.map((snapshot) => snapshot.id),
-                  ]),
-                ];
-
-                if (relationIdsToReset.length > 0) {
-                  yield* coreDb
-                    .deleteFrom("relation_members")
-                    .where("relation_id", "in", relationIdsToReset)
-                    .pipe(runQuery, Effect.asVoid);
-                }
-
-                yield* Effect.forEach(
-                  relationSnapshots,
-                  (snapshot) =>
-                    restoreRelationSnapshot(snapshot).pipe(
-                      Effect.zipRight(
-                        restoreRelationMemberSnapshots(
-                          snapshot.id,
-                          relationMemberSnapshots.filter(
-                            (memberSnapshot) => memberSnapshot.relation_id === snapshot.id,
-                          ),
-                        ),
-                      ),
-                    ),
-                  { discard: true },
-                );
-
-                if (createdRelationIds.size > 0) {
-                  yield* clearRelationGeometries([...createdRelationIds]);
-                  yield* coreDb
-                    .deleteFrom("relations")
-                    .where("id", "in", [...createdRelationIds])
-                    .pipe(runQuery, Effect.asVoid);
-                }
-
-                const wayIdsToReset = [
-                  ...new Set([
-                    ...createdWays.map((row) => row.id),
-                    ...waySnapshots.map((snapshot) => snapshot.id),
-                  ]),
-                ];
-
-                if (wayIdsToReset.length > 0) {
-                  yield* coreDb
-                    .deleteFrom("way_nodes")
-                    .where("way_id", "in", wayIdsToReset)
-                    .pipe(runQuery, Effect.asVoid);
-                }
-
-                yield* Effect.forEach(
-                  waySnapshots,
-                  (snapshot) =>
-                    restoreWaySnapshot(snapshot).pipe(
-                      Effect.zipRight(
-                        restoreWayNodeSnapshots(
-                          snapshot.id,
-                          wayNodeSnapshots.filter(
-                            (wayNodeSnapshot) => wayNodeSnapshot.way_id === snapshot.id,
-                          ),
-                        ),
-                      ),
-                    ),
-                  { discard: true },
-                );
-
-                if (createdWayIds.size > 0) {
-                  yield* Effect.forEach([...createdWayIds], (wayId) => deleteWayGeometry(wayId), {
-                    discard: true,
-                  });
-                  yield* coreDb
-                    .deleteFrom("ways")
-                    .where("id", "in", [...createdWayIds])
-                    .pipe(runQuery, Effect.asVoid);
-                }
-
-                yield* Effect.forEach(nodeSnapshots, (snapshot) => restoreNodeSnapshot(snapshot), {
-                  discard: true,
-                });
-
-                if (createdNodeIds.size > 0) {
-                  yield* coreDb
-                    .deleteFrom("nodes")
-                    .where("id", "in", [...createdNodeIds])
-                    .pipe(runQuery, Effect.asVoid);
-                }
-
-                yield* refreshWayGeometries(rollbackWayIds);
-                yield* refreshRelationGeometries(touchedRelationIds);
-
-                return yield* coreDb
-                  .updateTable("changesets")
-                  .set({
-                    status: "abandoned",
                   })
                   .where("id", "=", id)
                   .returningAll()
@@ -2252,8 +2128,8 @@ export const GeospatialRepositoryLive = Layer.effect(
       getWay,
       getRelation,
       createChangeset,
-      publishChangeset,
-      abandonChangeset,
+      uploadChangeset,
+      closeChangeset,
       createNode,
       updateNode,
       deleteNode,

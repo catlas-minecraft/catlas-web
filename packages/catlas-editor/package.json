@@ -1,0 +1,43 @@
+{
+  "name": "@catlas/editor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "portless editor.catlas vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview",
+    "check": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@catlas/domain": "workspace:^",
+    "@catlas/leaflet": "workspace:^",
+    "@effect/platform": "0.96.0",
+    "@tanstack/react-query": "^5.95.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "effect": "3.21.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.542.0",
+    "radix-ui": "^1.4.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-resizable-panels": "^4.7.6",
+    "shadcn": "^4.1.0",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.2",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/leaflet": "^1.9.21",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "portless": "^0.7.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.2",
+    "vite-plus": "^0.1.14",
+    "vite-tsconfig-paths": "^6.1.1"
+  }
+}

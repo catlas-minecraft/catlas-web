@@ -2,10 +2,7 @@ import type { Layer } from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import { useParent } from "../../context/parent.ts";
 
-export function useLayerLifecycleState<T extends Layer>(
-  createLayer: () => T,
-  deps: React.DependencyList,
-) {
+export function useLayerLifecycleState<T extends Layer>(createLayer: () => T) {
   const [layer, setLayer] = useState<T | null>(null);
   const { parent } = useParent();
 
@@ -17,15 +14,12 @@ export function useLayerLifecycleState<T extends Layer>(
     return () => {
       newLayer.remove();
     };
-  }, [parent, ...deps]);
+  }, [parent]);
 
   return layer;
 }
 
-export function useLayerLifecycleRef<T extends Layer>(
-  createLayer: () => T,
-  deps: React.DependencyList,
-) {
+export function useLayerLifecycleRef<T extends Layer>(createLayer: () => T) {
   const ref = useRef<T | null>(null);
   const { parent } = useParent();
 
@@ -38,7 +32,7 @@ export function useLayerLifecycleRef<T extends Layer>(
       layer.remove();
       ref.current = null;
     };
-  }, [parent, ...deps]);
+  }, [parent]);
 
   return ref;
 }

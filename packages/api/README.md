@@ -56,3 +56,15 @@ Geospatial write APIs require authentication and read the actor from either:
 - `session_jwt` cookie
 
 The resolved user id is stored into `changesets.created_by` and entity `created_by` / `updated_by`.
+
+## OSM-Style Changeset Flow
+
+The geospatial write API also supports an OSM-style lifecycle:
+
+1. `PUT /changesets/create`
+2. `POST /changesets/{id}/upload`
+3. `PUT /changesets/{id}/close`
+
+`create` returns a `{ changesetId }` payload, `upload` accepts batched create / modify / delete
+operations for nodes, ways, and relations and returns a `diffResult`, and `close` finalizes the
+changeset.
