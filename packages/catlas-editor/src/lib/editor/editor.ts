@@ -30,6 +30,8 @@ type ActiveNodeDrag = {
   coordinate: NodeCoordinate;
 };
 
+type SnapMode = "half" | "integer";
+
 type LocalWayDraft = {
   id: number;
   nodeIds: number[];
@@ -38,6 +40,18 @@ type LocalWayDraft = {
 };
 
 const createSyntheticTimestamp = () => Date.now();
+
+const snapHalf = (value: number) => Math.round(value - 0.5) + 0.5;
+
+const snapInteger = (value: number) => Math.round(value);
+
+const snapCoordinate = (
+  coordinate: { x: number; z: number },
+  mode: SnapMode,
+) => ({
+  x: mode === "integer" ? snapInteger(coordinate.x) : snapHalf(coordinate.x),
+  z: mode === "integer" ? snapInteger(coordinate.z) : snapHalf(coordinate.z),
+});
 
 const createLocalNodeSnapshot = ({
   id,
@@ -215,6 +229,10 @@ export class MapEditor {
     coordinate: { x: number; z: number },
     geometryKind: "line" | "area" = "line",
   ) {
+    const snappedCoordinate = snapCoordinate(
+      coordinate,
+      geometryKind === "area" ? "integer" : "half",
+    );
     const nodeId = this.nextLocalNodeId;
     this.nextLocalNodeId -= 1;
 
@@ -222,15 +240,15 @@ export class MapEditor {
       nodeId,
       createLocalNodeSnapshot({
         id: nodeId,
-        x: coordinate.x,
+        x: snappedCoordinate.x,
         y: 0,
-        z: coordinate.z,
+        z: snappedCoordinate.z,
       }),
     );
     this.editedNodeCoordinates.set(nodeId, {
-      x: coordinate.x,
+      x: snappedCoordinate.x,
       y: 0,
-      z: coordinate.z,
+      z: snappedCoordinate.z,
     });
 
     if (!this.creatingWay) {
@@ -431,6 +449,7 @@ export class MapEditor {
   }
 
   createNodeAt(coordinate: { x: number; z: number }) {
+    const snappedCoordinate = snapCoordinate(coordinate, "half");
     const nodeId = this.nextLocalNodeId;
     this.nextLocalNodeId -= 1;
 
@@ -438,15 +457,15 @@ export class MapEditor {
       nodeId,
       createLocalNodeSnapshot({
         id: nodeId,
-        x: coordinate.x,
+        x: snappedCoordinate.x,
         y: 0,
-        z: coordinate.z,
+        z: snappedCoordinate.z,
       }),
     );
     this.editedNodeCoordinates.set(nodeId, {
-      x: coordinate.x,
+      x: snappedCoordinate.x,
       y: 0,
-      z: coordinate.z,
+      z: snappedCoordinate.z,
     });
 
     const nextSelection: SelectedEntity = { type: "node", id: nodeId };
@@ -747,6 +766,39 @@ export class MapEditor {
     );
   }
 
+  private getNodeSnapMode(nodeId: number): SnapMode {
+    const connectedWayIds = new Set<number>();
+
+    for (const wayId of this.normalizedData?.wayIdsByNodeId.get(nodeId) ?? []) {
+      connectedWayIds.add(wayId);
+    }
+
+    for (const [wayId, createdWay] of this.createdWaysById) {
+      if (createdWay.nodeIds.includes(nodeId)) {
+        connectedWayIds.add(wayId);
+      }
+    }
+
+    if (this.creatingWay?.nodeIds.includes(nodeId)) {
+      connectedWayIds.add(this.creatingWay.id);
+    }
+
+    for (const wayId of connectedWayIds) {
+      const geometryKind =
+        this.createdWaysById.get(wayId)?.way.geometryKind ??
+        (this.creatingWay?.id === wayId ? this.creatingWay.way.geometryKind : null) ??
+        this.normalizedData?.renderedWays.get(wayId)?.way.geometryKind ??
+        this.serverData?.renderedWays.get(wayId)?.way.geometryKind ??
+        this.pinnedWaysById.get(wayId)?.way.geometryKind;
+
+      if (geometryKind === "area") {
+        return "integer";
+      }
+    }
+
+    return "half";
+  }
+
   private getEffectiveNode(data: NormalizedViewportData, nodeId: number) {
     const node = data.nodesById.get(nodeId);
 
@@ -1013,16 +1065,19 @@ export class MapEditor {
       return;
     }
 
+    const snappedCoordinate = snapCoordinate(coordinate, this.getNodeSnapMode(nodeId));
+
     this.activeNodeDrag = {
       id: nodeId,
       coordinate: {
-        x: coordinate.x,
+        x: snappedCoordinate.x,
         y: node.geom.y,
-        z: coordinate.z,
+        z: snappedCoordinate.z,
       },
     };
     this.emitChangesChange();
     this.patchDraggedNode(nodeId);
+    return snappedCoordinate;
   }
 
   private endNodeDrag(nodeId: number, coordinate: { x: number; z: number }) {
@@ -1030,20 +1085,22 @@ export class MapEditor {
 
     if (!data) {
       this.activeNodeDrag = null;
-      return;
+      return coordinate;
     }
 
     const baseNode = this.getBaseNode(nodeId);
 
     if (!baseNode) {
       this.activeNodeDrag = null;
-      return;
+      return coordinate;
     }
 
+    const snappedCoordinate = snapCoordinate(coordinate, this.getNodeSnapMode(nodeId));
+
     const nextCoordinate = {
-      x: coordinate.x,
+      x: snappedCoordinate.x,
       y: baseNode.geom.y,
-      z: coordinate.z,
+      z: snappedCoordinate.z,
     };
 
     this.activeNodeDrag = {
@@ -1061,5 +1118,6 @@ export class MapEditor {
     this.normalizedData = this.serverData ? this.buildDisplayData(this.serverData) : this.normalizedData;
     this.emitChangesChange();
     this.patchDraggedNode(nodeId);
+    return snappedCoordinate;
   }
 }

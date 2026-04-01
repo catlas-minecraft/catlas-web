@@ -58,8 +58,14 @@ const createNodeLayer = (
   options?: {
     onNodeSelect?: (id: number) => void;
     onNodeDragStart?: (id: number) => void;
-    onNodeDragMove?: (id: number, coordinate: { x: number; z: number }) => void;
-    onNodeDragEnd?: (id: number, coordinate: { x: number; z: number }) => void;
+    onNodeDragMove?: (
+      id: number,
+      coordinate: { x: number; z: number },
+    ) => { x: number; z: number } | void;
+    onNodeDragEnd?: (
+      id: number,
+      coordinate: { x: number; z: number },
+    ) => { x: number; z: number } | void;
   },
 ) => {
   const nodeLayer = marker(toLatLng(node), {
@@ -75,11 +81,17 @@ const createNodeLayer = (
   nodeLayer.on("dragstart", () => options?.onNodeDragStart?.(node.id));
   nodeLayer.on("drag", () => {
     const latLng = nodeLayer.getLatLng();
-    options?.onNodeDragMove?.(node.id, toCoordinate(latLng.lat, latLng.lng));
+    const nextCoordinate =
+      options?.onNodeDragMove?.(node.id, toCoordinate(latLng.lat, latLng.lng)) ??
+      toCoordinate(latLng.lat, latLng.lng);
+    nodeLayer.setLatLng(toLatLngFromCoordinate(nextCoordinate));
   });
   nodeLayer.on("dragend", () => {
     const latLng = nodeLayer.getLatLng();
-    options?.onNodeDragEnd?.(node.id, toCoordinate(latLng.lat, latLng.lng));
+    const nextCoordinate =
+      options?.onNodeDragEnd?.(node.id, toCoordinate(latLng.lat, latLng.lng)) ??
+      toCoordinate(latLng.lat, latLng.lng);
+    nodeLayer.setLatLng(toLatLngFromCoordinate(nextCoordinate));
   });
 
   return nodeLayer;
@@ -124,6 +136,9 @@ const toCoordinate = (lat: number, lng: number) => ({
   z: lat,
 });
 
+const toLatLngFromCoordinate = (coordinate: { x: number; z: number }) =>
+  [coordinate.z, coordinate.x] as [number, number];
+
 export class LeafletViewportStore {
   private readonly nodeLayers = new Map<number, Marker>();
   private readonly wayLayers = new Map<number, Polyline | Polygon>();
@@ -132,8 +147,14 @@ export class LeafletViewportStore {
   private readonly onNodeSelect?: (id: number) => void;
   private readonly onWaySelect?: (id: number) => void;
   private readonly onNodeDragStart?: (id: number) => void;
-  private readonly onNodeDragMove?: (id: number, coordinate: { x: number; z: number }) => void;
-  private readonly onNodeDragEnd?: (id: number, coordinate: { x: number; z: number }) => void;
+  private readonly onNodeDragMove?: (
+    id: number,
+    coordinate: { x: number; z: number },
+  ) => { x: number; z: number } | void;
+  private readonly onNodeDragEnd?: (
+    id: number,
+    coordinate: { x: number; z: number },
+  ) => { x: number; z: number } | void;
 
   constructor(
     leafletMap: LeafletMap,
@@ -141,8 +162,14 @@ export class LeafletViewportStore {
       onNodeSelect?: (id: number) => void;
       onWaySelect?: (id: number) => void;
       onNodeDragStart?: (id: number) => void;
-      onNodeDragMove?: (id: number, coordinate: { x: number; z: number }) => void;
-      onNodeDragEnd?: (id: number, coordinate: { x: number; z: number }) => void;
+      onNodeDragMove?: (
+        id: number,
+        coordinate: { x: number; z: number },
+      ) => { x: number; z: number } | void;
+      onNodeDragEnd?: (
+        id: number,
+        coordinate: { x: number; z: number },
+      ) => { x: number; z: number } | void;
     },
   ) {
     this.wayLayerGroup = layerGroup().addTo(leafletMap);
