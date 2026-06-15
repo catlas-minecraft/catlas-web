@@ -1,52 +1,113 @@
 import { CloudUploadIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import type { CatlasEditor } from "@/lib/editor";
 import { useEditorSnapshot } from "./use-editor-snapshot";
 
 export function EditorSavePanel({ editor }: { readonly editor: CatlasEditor | null }) {
-  if (!editor) return <div className="save-panel" />;
+  if (!editor) return null;
   return <SavePanelContent editor={editor} />;
 }
 
 function SavePanelContent({ editor }: { readonly editor: CatlasEditor }) {
   const snapshot = useEditorSnapshot(editor);
+  const [open, setOpen] = useState(false);
   const [comment, setComment] = useState("");
   const blockingIssues = snapshot.issues.filter((issue) => issue.severity === "error");
   const isSaving = snapshot.save.status === "saving";
   const isAuthenticated = snapshot.auth.status === "authenticated";
+  const canSave = snapshot.dirty && blockingIssues.length === 0 && !isSaving && isAuthenticated;
+  const disabledReason = !isAuthenticated
+    ? "Sign in before saving changes."
+    : blockingIssues.length
+      ? `${blockingIssues.length} errors block saving.`
+      : !snapshot.dirty
+        ? "No unsaved changes."
+        : undefined;
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSave) return;
+    void editor.save(comment.trim() || null).then(() => {
+      if (editor.getSnapshot().save.status !== "saved") return;
+      setOpen(false);
+      setComment("");
+    });
+  };
 
   return (
-    <div className="save-panel">
-      <div className="save-panel__summary">
-        <strong>
-          {snapshot.issues.length ? `${snapshot.issues.length} checks` : "Ready to publish"}
-        </strong>
-        <span>
-          {blockingIssues.length
-            ? `${blockingIssues.length} errors block saving`
-            : isAuthenticated
-              ? "No blocking errors"
-              : "Sign in to publish"}
-        </span>
-      </div>
-      <Input
-        aria-label="Changeset comment"
-        onChange={(event) => setComment(event.target.value)}
-        placeholder="Describe your changes"
-        value={comment}
-      />
-      <Button
-        disabled={!snapshot.dirty || blockingIssues.length > 0 || isSaving || !isAuthenticated}
-        onClick={() => void editor.save(comment.trim() || null)}
-        size="lg"
-        type="button"
-      >
-        {isSaving ? <Spinner /> : <CloudUploadIcon data-icon="inline-start" />}
-        {isSaving ? "Publishing..." : isAuthenticated ? "Publish changes" : "Sign in to publish"}
-      </Button>
-    </div>
+    <Popover
+      onOpenChange={(nextOpen) => {
+        if (nextOpen && !canSave) return;
+        setOpen(nextOpen);
+      }}
+      open={open}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          aria-label="Save changes"
+          disabled={!canSave}
+          title={disabledReason ?? "Save changes"}
+          type="button"
+        >
+          {isSaving ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <CloudUploadIcon data-icon="inline-start" />
+          )}
+          {isSaving ? "Saving..." : "Save"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="save-panel" sideOffset={10}>
+        <PopoverHeader>
+          <PopoverTitle>Save changes</PopoverTitle>
+          <PopoverDescription>
+            Add an optional message before publishing this changeset.
+          </PopoverDescription>
+        </PopoverHeader>
+        <form className="save-panel__form" onSubmit={handleSubmit}>
+          <FieldGroup className="gap-3">
+            <Field>
+              <FieldLabel htmlFor="changeset-comment">Message</FieldLabel>
+              <Input
+                aria-label="Changeset message"
+                autoFocus
+                disabled={isSaving}
+                id="changeset-comment"
+                onChange={(event) => setComment(event.target.value)}
+                placeholder="Describe your changes"
+                value={comment}
+              />
+              <FieldDescription>
+                {snapshot.issues.length
+                  ? `${snapshot.issues.length} checks, ${blockingIssues.length} blocking.`
+                  : "Ready to save."}
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+          <div className="save-panel__actions">
+            <Button disabled={!canSave} type="submit">
+              {isSaving ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <CloudUploadIcon data-icon="inline-start" />
+              )}
+              {isSaving ? "Saving..." : "Done"}
+            </Button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }

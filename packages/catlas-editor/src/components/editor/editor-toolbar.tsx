@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CatlasEditor, EditorMode } from "@/lib/editor";
+import { EditorSavePanel } from "./editor-save-panel";
 import { useEditorSnapshot } from "./use-editor-snapshot";
 
 const MODE_BUTTONS: readonly { mode: EditorMode; label: string; shortcut: string }[] = [
@@ -98,6 +99,7 @@ function ToolbarContent({ editor }: { readonly editor: CatlasEditor }) {
         {snapshot.loading ? "Loading viewport" : snapshot.dirty ? "Unsaved changes" : "Up to date"}
       </Badge>
       <AuthControl editor={editor} snapshot={snapshot} />
+      <EditorSavePanel editor={editor} />
     </div>
   );
 }

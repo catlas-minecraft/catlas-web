@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { EditorInspector } from "./components/editor/editor-inspector";
 import { EditorMapOverlays } from "./components/editor/editor-map-overlays";
-import { EditorSavePanel } from "./components/editor/editor-save-panel";
 import { EditorToolbar } from "./components/editor/editor-toolbar";
 import { CatlasEditor } from "./lib/editor";
 
@@ -30,7 +29,6 @@ export default function App() {
           <EditorMapOverlays editor={editor} />
         </div>
       </main>
-      <EditorSavePanel editor={editor} />
     </div>
   );
 }
