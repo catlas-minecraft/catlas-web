@@ -1,25 +1,31 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, HttpApiSecurity } from "@effect/platform"
-import { Context, Schema } from "effect"
-import * as GeospatialSchema from "@catlas/schema/Geospatial"
-import { UnauthorizedError } from "./AuthApi.js"
+import {
+  HttpApiEndpoint,
+  HttpApiGroup,
+  HttpApiMiddleware,
+  HttpApiSchema,
+  HttpApiSecurity,
+} from "@effect/platform";
+import { Context, Schema } from "effect";
+import * as GeospatialSchema from "@catlas/schema/Geospatial";
+import { UnauthorizedError } from "./AuthApi.js";
 
-export const EntityId = GeospatialSchema.EntityId
-export type EntityId = typeof GeospatialSchema.EntityId.Type
+export const EntityId = GeospatialSchema.EntityId;
+export type EntityId = typeof GeospatialSchema.EntityId.Type;
 
-export const EntityIdFromString = GeospatialSchema.EntityIdFromString
-export type EntityIdFromString = typeof GeospatialSchema.EntityIdFromString.Type
+export const EntityIdFromString = GeospatialSchema.EntityIdFromString;
+export type EntityIdFromString = typeof GeospatialSchema.EntityIdFromString.Type;
 
-export const Tags = GeospatialSchema.Tags
-export type Tags = typeof GeospatialSchema.Tags.Type
+export const Tags = GeospatialSchema.Tags;
+export type Tags = typeof GeospatialSchema.Tags.Type;
 
-export const GeometryKind = GeospatialSchema.GeometryKind
-export type GeometryKind = typeof GeospatialSchema.GeometryKind.Type
+export const GeometryKind = GeospatialSchema.GeometryKind;
+export type GeometryKind = typeof GeospatialSchema.GeometryKind.Type;
 
-export const Point3D = GeospatialSchema.Point3D
-export type Point3D = InstanceType<typeof GeospatialSchema.Point3D>
+export const Point3D = GeospatialSchema.Point3D;
+export type Point3D = InstanceType<typeof GeospatialSchema.Point3D>;
 
-export const BBox2D = GeospatialSchema.BBox2D
-export type BBox2D = InstanceType<typeof GeospatialSchema.BBox2D>
+export const BBox2D = GeospatialSchema.BBox2D;
+export type BBox2D = InstanceType<typeof GeospatialSchema.BBox2D>;
 
 export class ChangesetSnapshot extends Schema.Class<ChangesetSnapshot>("ChangesetSnapshot")({
   id: Schema.Number,
@@ -27,17 +33,19 @@ export class ChangesetSnapshot extends Schema.Class<ChangesetSnapshot>("Changese
   comment: Schema.Union(Schema.String, Schema.Null),
   createdBy: Schema.String,
   createdAt: Schema.Number,
-  publishedAt: Schema.Union(Schema.Number, Schema.Null)
+  publishedAt: Schema.Union(Schema.Number, Schema.Null),
 }) {}
 
-export class ChangesetCreateResult extends Schema.Class<ChangesetCreateResult>("ChangesetCreateResult")({
-  changesetId: Schema.Number
+export class ChangesetCreateResult extends Schema.Class<ChangesetCreateResult>(
+  "ChangesetCreateResult",
+)({
+  changesetId: Schema.Number,
 }) {}
 
 export class DiffResultEntry extends Schema.Class<DiffResultEntry>("DiffResultEntry")({
   oldId: Schema.Number,
   newId: Schema.Number,
-  newVersion: Schema.Number
+  newVersion: Schema.Number,
 }) {}
 
 export class NodeSnapshot extends Schema.Class<NodeSnapshot>("NodeSnapshot")({
@@ -51,7 +59,7 @@ export class NodeSnapshot extends Schema.Class<NodeSnapshot>("NodeSnapshot")({
   createdBy: Schema.String,
   updatedBy: Schema.String,
   deletedAt: Schema.Union(Schema.Number, Schema.Null),
-  changesetId: Schema.Number
+  changesetId: Schema.Number,
 }) {}
 
 export class WaySnapshot extends Schema.Class<WaySnapshot>("WaySnapshot")({
@@ -66,7 +74,7 @@ export class WaySnapshot extends Schema.Class<WaySnapshot>("WaySnapshot")({
   createdBy: Schema.String,
   updatedBy: Schema.String,
   deletedAt: Schema.Union(Schema.Number, Schema.Null),
-  changesetId: Schema.Number
+  changesetId: Schema.Number,
 }) {}
 
 export class WayNodeSnapshot extends Schema.Class<WayNodeSnapshot>("WayNodeSnapshot")({
@@ -75,7 +83,7 @@ export class WayNodeSnapshot extends Schema.Class<WayNodeSnapshot>("WayNodeSnaps
   nodeId: Schema.Number,
   seq: Schema.Number,
   version: Schema.Number,
-  changesetId: Schema.Number
+  changesetId: Schema.Number,
 }) {}
 
 export class RelationSnapshot extends Schema.Class<RelationSnapshot>("RelationSnapshot")({
@@ -88,10 +96,12 @@ export class RelationSnapshot extends Schema.Class<RelationSnapshot>("RelationSn
   createdBy: Schema.String,
   updatedBy: Schema.String,
   deletedAt: Schema.Union(Schema.Number, Schema.Null),
-  changesetId: Schema.Number
+  changesetId: Schema.Number,
 }) {}
 
-export class RelationMemberSnapshot extends Schema.Class<RelationMemberSnapshot>("RelationMemberSnapshot")({
+export class RelationMemberSnapshot extends Schema.Class<RelationMemberSnapshot>(
+  "RelationMemberSnapshot",
+)({
   id: Schema.Number,
   relationId: Schema.Number,
   memberType: Schema.Literal("node", "way", "relation"),
@@ -99,59 +109,59 @@ export class RelationMemberSnapshot extends Schema.Class<RelationMemberSnapshot>
   seq: Schema.Number,
   role: Schema.Union(Schema.String, Schema.Null),
   version: Schema.Number,
-  changesetId: Schema.Number
+  changesetId: Schema.Number,
 }) {}
 
 export class NodeDetailSnapshot extends Schema.Class<NodeDetailSnapshot>("NodeDetailSnapshot")({
-  node: NodeSnapshot
+  node: NodeSnapshot,
 }) {}
 
 export class WayDetailSnapshot extends Schema.Class<WayDetailSnapshot>("WayDetailSnapshot")({
   way: WaySnapshot,
   nodes: Schema.Array(NodeSnapshot),
-  wayNodes: Schema.Array(WayNodeSnapshot)
+  wayNodes: Schema.Array(WayNodeSnapshot),
 }) {}
 
 export class RelationDetailSnapshot extends Schema.Class<RelationDetailSnapshot>(
-  "RelationDetailSnapshot"
+  "RelationDetailSnapshot",
 )({
   relation: RelationSnapshot,
-  relationMembers: Schema.Array(RelationMemberSnapshot)
+  relationMembers: Schema.Array(RelationMemberSnapshot),
 }) {}
 
 export class RelationMemberInput extends Schema.Class<RelationMemberInput>("RelationMemberInput")({
   memberType: Schema.Literal("node", "way", "relation"),
   memberId: Schema.Number,
-  role: Schema.Union(Schema.String, Schema.Null)
+  role: Schema.Union(Schema.String, Schema.Null),
 }) {}
 
 const uploadNodeCreatePayload = Schema.Struct({
   id: Schema.Number,
   geom: Point3D,
   featureType: Schema.String,
-  tags: Tags
-})
+  tags: Tags,
+});
 
 const uploadNodeModifyPayload = Schema.Struct({
   id: EntityId,
   expectedVersion: Schema.Number,
   geom: Point3D,
   featureType: Schema.String,
-  tags: Tags
-})
+  tags: Tags,
+});
 
 const uploadNodeDeletePayload = Schema.Struct({
   id: EntityId,
-  expectedVersion: Schema.Number
-})
+  expectedVersion: Schema.Number,
+});
 
 const uploadWayCreatePayload = Schema.Struct({
   id: Schema.Number,
   featureType: Schema.String,
   geometryKind: GeometryKind,
   nodeRefs: Schema.Array(Schema.Number),
-  tags: Tags
-})
+  tags: Tags,
+});
 
 const uploadWayModifyPayload = Schema.Struct({
   id: EntityId,
@@ -159,59 +169,61 @@ const uploadWayModifyPayload = Schema.Struct({
   featureType: Schema.String,
   geometryKind: GeometryKind,
   nodeRefs: Schema.Array(Schema.Number),
-  tags: Tags
-})
+  tags: Tags,
+});
 
 const uploadWayDeletePayload = Schema.Struct({
   id: EntityId,
-  expectedVersion: Schema.Number
-})
+  expectedVersion: Schema.Number,
+});
 
 const uploadRelationCreatePayload = Schema.Struct({
   id: Schema.Number,
   relationType: Schema.String,
   members: Schema.Array(RelationMemberInput),
-  tags: Tags
-})
+  tags: Tags,
+});
 
 const uploadRelationModifyPayload = Schema.Struct({
   id: EntityId,
   expectedVersion: Schema.Number,
   relationType: Schema.String,
   members: Schema.Array(RelationMemberInput),
-  tags: Tags
-})
+  tags: Tags,
+});
 
 const uploadRelationDeletePayload = Schema.Struct({
   id: EntityId,
-  expectedVersion: Schema.Number
-})
+  expectedVersion: Schema.Number,
+});
 
-export class ChangesetUploadRequest extends Schema.Class<ChangesetUploadRequest>("ChangesetUploadRequest")({
+export class ChangesetUploadRequest extends Schema.Class<ChangesetUploadRequest>(
+  "ChangesetUploadRequest",
+)({
   create: Schema.Struct({
     nodes: Schema.Array(uploadNodeCreatePayload),
     ways: Schema.Array(uploadWayCreatePayload),
-    relations: Schema.Array(uploadRelationCreatePayload)
+    relations: Schema.Array(uploadRelationCreatePayload),
   }),
   modify: Schema.Struct({
     nodes: Schema.Array(uploadNodeModifyPayload),
     ways: Schema.Array(uploadWayModifyPayload),
-    relations: Schema.Array(uploadRelationModifyPayload)
+    relations: Schema.Array(uploadRelationModifyPayload),
   }),
   delete: Schema.Struct({
     nodes: Schema.Array(uploadNodeDeletePayload),
     ways: Schema.Array(uploadWayDeletePayload),
-    relations: Schema.Array(uploadRelationDeletePayload)
-  })
+    relations: Schema.Array(uploadRelationDeletePayload),
+  }),
 }) {}
-export type ChangesetUploadPayload = InstanceType<typeof ChangesetUploadRequest>
+export type ChangesetUploadPayload = InstanceType<typeof ChangesetUploadRequest>;
 
 export class ChangesetUploadDiffResult extends Schema.Class<ChangesetUploadDiffResult>(
-  "ChangesetUploadDiffResult"
+  "ChangesetUploadDiffResult",
 )({
   nodes: Schema.Array(DiffResultEntry),
   ways: Schema.Array(DiffResultEntry),
-  relations: Schema.Array(DiffResultEntry)
+  relations: Schema.Array(DiffResultEntry),
 }) {}
 
 export class ViewportSnapshot extends Schema.Class<ViewportSnapshot>("ViewportSnapshot")({
@@ -219,49 +231,58 @@ export class ViewportSnapshot extends Schema.Class<ViewportSnapshot>("ViewportSn
   ways: Schema.Array(WaySnapshot),
   wayNodes: Schema.Array(WayNodeSnapshot),
   relations: Schema.Array(RelationSnapshot),
-  relationMembers: Schema.Array(RelationMemberSnapshot)
+  relationMembers: Schema.Array(RelationMemberSnapshot),
 }) {}
 
 export class NotFoundError extends Schema.TaggedError<NotFoundError>()("NotFoundError", {
   entity: Schema.String,
-  id: Schema.Number
-}) {}
-
-export class VersionConflictError extends Schema.TaggedError<VersionConflictError>()("VersionConflictError", {
-  entity: Schema.String,
   id: Schema.Number,
-  expectedVersion: Schema.Number,
-  actualVersion: Schema.Number
 }) {}
 
-export class InvalidTopologyError extends Schema.TaggedError<InvalidTopologyError>()("InvalidTopologyError", {
-  message: Schema.String
-}) {}
+export class VersionConflictError extends Schema.TaggedError<VersionConflictError>()(
+  "VersionConflictError",
+  {
+    entity: Schema.String,
+    id: Schema.Number,
+    expectedVersion: Schema.Number,
+    actualVersion: Schema.Number,
+  },
+) {}
+
+export class InvalidTopologyError extends Schema.TaggedError<InvalidTopologyError>()(
+  "InvalidTopologyError",
+  {
+    message: Schema.String,
+  },
+) {}
 
 export class InvalidGeometryStateError extends Schema.TaggedError<InvalidGeometryStateError>()(
   "InvalidGeometryStateError",
   {
-    message: Schema.String
-  }
+    message: Schema.String,
+  },
 ) {}
 
-export class ChangesetNotOpenError extends Schema.TaggedError<ChangesetNotOpenError>()("ChangesetNotOpenError", {
-  changesetId: Schema.Number
-}) {}
+export class ChangesetNotOpenError extends Schema.TaggedError<ChangesetNotOpenError>()(
+  "ChangesetNotOpenError",
+  {
+    changesetId: Schema.Number,
+  },
+) {}
 
 export class ValidationError extends Schema.TaggedError<ValidationError>()("ValidationError", {
-  message: Schema.String
+  message: Schema.String,
 }) {}
 
 export class InvalidTagError extends Schema.TaggedError<InvalidTagError>()("InvalidTagError", {
-  message: Schema.String
+  message: Schema.String,
 }) {}
 
 export class GeospatialOperationError extends Schema.TaggedError<GeospatialOperationError>()(
   "GeospatialOperationError",
   {
-    message: Schema.String
-  }
+    message: Schema.String,
+  },
 ) {}
 
 export class CurrentActor extends Context.Tag("CurrentActor")<
@@ -278,18 +299,18 @@ export class WriteAuthorization extends HttpApiMiddleware.Tag<WriteAuthorization
       bearer: HttpApiSecurity.bearer,
       sessionCookie: HttpApiSecurity.apiKey({
         key: "session_jwt",
-        in: "cookie"
-      })
-    }
-  }
+        in: "cookie",
+      }),
+    },
+  },
 ) {}
 
 const viewportUrlParams = Schema.Struct({
   bbox: Schema.String,
   includeRelations: Schema.optionalWith(Schema.BooleanFromString, {
-    default: () => false
-  })
-})
+    default: () => false,
+  }),
+});
 
 export class ViewportApiGroup extends HttpApiGroup.make("viewport")
   .add(
@@ -297,10 +318,9 @@ export class ViewportApiGroup extends HttpApiGroup.make("viewport")
       .addSuccess(ViewportSnapshot)
       .addError(ValidationError, { status: 400 })
       .addError(GeospatialOperationError, { status: 500 })
-      .setUrlParams(viewportUrlParams)
+      .setUrlParams(viewportUrlParams),
   )
-  .prefix("/viewport")
-{}
+  .prefix("/viewport") {}
 
 export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
   .add(
@@ -311,12 +331,14 @@ export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
       .addError(GeospatialOperationError, { status: 500 })
       .setPayload(
         Schema.Struct({
-          comment: Schema.Union(Schema.String, Schema.Null)
-        })
-      )
+          comment: Schema.Union(Schema.String, Schema.Null),
+        }),
+      ),
   )
   .add(
-    HttpApiEndpoint.post("uploadChangeset")`/${HttpApiSchema.param("id", EntityIdFromString)}/upload`
+    HttpApiEndpoint.post(
+      "uploadChangeset",
+    )`/${HttpApiSchema.param("id", EntityIdFromString)}/upload`
       .addSuccess(ChangesetUploadDiffResult)
       .addError(UnauthorizedError, { status: 401 })
       .addError(NotFoundError, { status: 404 })
@@ -327,7 +349,7 @@ export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
       .addError(InvalidGeometryStateError, { status: 409 })
       .addError(ValidationError, { status: 400 })
       .addError(GeospatialOperationError, { status: 500 })
-      .setPayload(ChangesetUploadRequest)
+      .setPayload(ChangesetUploadRequest),
   )
   .add(
     HttpApiEndpoint.put("closeChangeset")`/${HttpApiSchema.param("id", EntityIdFromString)}/close`
@@ -336,18 +358,17 @@ export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
       .addError(NotFoundError, { status: 404 })
       .addError(VersionConflictError, { status: 409 })
       .addError(ChangesetNotOpenError, { status: 409 })
-      .addError(GeospatialOperationError, { status: 500 })
+      .addError(GeospatialOperationError, { status: 500 }),
   )
   .prefix("/changesets")
-  .middleware(WriteAuthorization)
-{}
+  .middleware(WriteAuthorization) {}
 
 export class NodesApiGroup extends HttpApiGroup.make("nodes")
   .add(
     HttpApiEndpoint.get("getNode")`/${HttpApiSchema.param("id", EntityIdFromString)}`
       .addSuccess(NodeDetailSnapshot)
       .addError(NotFoundError, { status: 404 })
-      .addError(GeospatialOperationError, { status: 500 })
+      .addError(GeospatialOperationError, { status: 500 }),
   )
   .add(
     HttpApiEndpoint.post("createNode", "/")
@@ -363,10 +384,10 @@ export class NodesApiGroup extends HttpApiGroup.make("nodes")
           changesetId: EntityId,
           geom: Point3D,
           featureType: Schema.String,
-          tags: Tags
-        })
+          tags: Tags,
+        }),
       )
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.patch("updateNode")`/${HttpApiSchema.param("id", EntityIdFromString)}`
@@ -384,10 +405,10 @@ export class NodesApiGroup extends HttpApiGroup.make("nodes")
           changesetId: EntityId,
           geom: Point3D,
           featureType: Schema.String,
-          tags: Tags
-        })
+          tags: Tags,
+        }),
       )
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.del("deleteNode")`/${HttpApiSchema.param("id", EntityIdFromString)}`
@@ -401,28 +422,27 @@ export class NodesApiGroup extends HttpApiGroup.make("nodes")
       .setPayload(
         Schema.Struct({
           expectedVersion: Schema.Number,
-          changesetId: EntityId
-        })
+          changesetId: EntityId,
+        }),
       )
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
-  .prefix("/nodes")
-{}
+  .prefix("/nodes") {}
 
 const wayPayload = Schema.Struct({
   changesetId: EntityId,
   featureType: Schema.String,
   geometryKind: GeometryKind,
   nodeRefs: Schema.Array(EntityId),
-  tags: Tags
-})
+  tags: Tags,
+});
 
 export class WaysApiGroup extends HttpApiGroup.make("ways")
   .add(
     HttpApiEndpoint.get("getWay")`/${HttpApiSchema.param("id", EntityIdFromString)}`
       .addSuccess(WayDetailSnapshot)
       .addError(NotFoundError, { status: 404 })
-      .addError(GeospatialOperationError, { status: 500 })
+      .addError(GeospatialOperationError, { status: 500 }),
   )
   .add(
     HttpApiEndpoint.post("createWay", "/")
@@ -436,7 +456,7 @@ export class WaysApiGroup extends HttpApiGroup.make("ways")
       .addError(ValidationError, { status: 400 })
       .addError(GeospatialOperationError, { status: 500 })
       .setPayload(wayPayload)
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.patch("updateWay")`/${HttpApiSchema.param("id", EntityIdFromString)}`
@@ -457,10 +477,10 @@ export class WaysApiGroup extends HttpApiGroup.make("ways")
           featureType: Schema.String,
           geometryKind: GeometryKind,
           nodeRefs: Schema.Array(EntityId),
-          tags: Tags
-        })
+          tags: Tags,
+        }),
       )
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.del("deleteWay")`/${HttpApiSchema.param("id", EntityIdFromString)}`
@@ -474,27 +494,26 @@ export class WaysApiGroup extends HttpApiGroup.make("ways")
       .setPayload(
         Schema.Struct({
           expectedVersion: Schema.Number,
-          changesetId: EntityId
-        })
+          changesetId: EntityId,
+        }),
       )
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
-  .prefix("/ways")
-{}
+  .prefix("/ways") {}
 
 const relationPayload = Schema.Struct({
   changesetId: EntityId,
   relationType: Schema.String,
   members: Schema.Array(RelationMemberInput),
-  tags: Tags
-})
+  tags: Tags,
+});
 
 export class RelationsApiGroup extends HttpApiGroup.make("relations")
   .add(
     HttpApiEndpoint.get("getRelation")`/${HttpApiSchema.param("id", EntityIdFromString)}`
       .addSuccess(RelationDetailSnapshot)
       .addError(NotFoundError, { status: 404 })
-      .addError(GeospatialOperationError, { status: 500 })
+      .addError(GeospatialOperationError, { status: 500 }),
   )
   .add(
     HttpApiEndpoint.post("createRelation", "/")
@@ -507,7 +526,7 @@ export class RelationsApiGroup extends HttpApiGroup.make("relations")
       .addError(ValidationError, { status: 400 })
       .addError(GeospatialOperationError, { status: 500 })
       .setPayload(relationPayload)
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.patch("updateRelation")`/${HttpApiSchema.param("id", EntityIdFromString)}`
@@ -526,10 +545,10 @@ export class RelationsApiGroup extends HttpApiGroup.make("relations")
           changesetId: EntityId,
           relationType: Schema.String,
           members: Schema.Array(RelationMemberInput),
-          tags: Tags
-        })
+          tags: Tags,
+        }),
       )
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.del("deleteRelation")`/${HttpApiSchema.param("id", EntityIdFromString)}`
@@ -543,10 +562,9 @@ export class RelationsApiGroup extends HttpApiGroup.make("relations")
       .setPayload(
         Schema.Struct({
           expectedVersion: Schema.Number,
-          changesetId: EntityId
-        })
+          changesetId: EntityId,
+        }),
       )
-      .middleware(WriteAuthorization)
+      .middleware(WriteAuthorization),
   )
-  .prefix("/relations")
-{}
+  .prefix("/relations") {}

@@ -1,6 +1,7 @@
 # 技術的要件まとめ
 
 ## 全体方針
+
 - ゲーム版 OSM 風の Web アプリを作る
 - 主目的は **共同編集**
 - 表示は画像タイル前提ではなく、**Node / Way / Relation 的なオブジェクトを返してクライアントで扱う**
@@ -14,6 +15,7 @@
 ---
 
 ## データモデル方針
+
 - 正規データの本体は OSM 風
   - `nodes`
   - `ways`
@@ -30,12 +32,13 @@
   - `feature_type`
   - `geometry_kind` (`line` / `area`)
   - `is_closed`
-  を持たせて明示的に扱う想定
+    を持たせて明示的に扱う想定
 - `feature_type` / `geometry_kind` / `is_closed` / `relation_type` は **第一級カラム** とし、`tags` に重複させない
 
 ---
 
 ## geometry の扱い
+
 - geometry は使う
 - ただし **主データではなく補助データ**
 - 真実のデータはあくまで
@@ -53,6 +56,7 @@
 ---
 
 ## 3D 方針
+
 - 3軸で進める
 - 高さは Z
 - geometry 自体は Z 付きで持つ
@@ -64,6 +68,7 @@
 ---
 
 ## SRID / geometry 型の前提
+
 - SRID はすべて `0`
 - 例
   - `nodes.geom = geometry(PointZ, 0)`
@@ -73,6 +78,7 @@
 ---
 
 ## 共同編集方針
+
 - 複数人で同じ世界を編集できること
 - 必要な概念
   - changeset
@@ -82,13 +88,14 @@
   - 論理削除
 - OSM 本家のような「upload ごとに即反映」より、
   - **保存 / 公開時に changeset を確定**
-  する Web アプリ寄りの運用が合いそう
+    する Web アプリ寄りの運用が合いそう
 - 各 entity は version を持つ
 - 将来的に履歴テーブルを持てる設計にする
 
 ---
 
 ## viewport 取得方針
+
 - bbox 判定は 2D
 - way の選定は **geometry 補助**を使う
 - 返却形式は geometry 一本ではなく、編集可能な構造を返す
@@ -103,6 +110,7 @@
 ---
 
 ## geometry 補助の更新方針
+
 - geometry 補助は shape が変わったときに更新する
 - 更新契機
   - `way_nodes` 追加
@@ -120,6 +128,7 @@
 ## スキーマ要件
 
 ### core schema
+
 - `nodes`
 - `ways`
 - `way_nodes`
@@ -128,6 +137,7 @@
 - `changesets`
 
 ### history schema
+
 - `node_versions`
 - `way_versions`
 - `way_node_versions`
@@ -135,6 +145,7 @@
 - `relation_member_versions`
 
 ### derived schema
+
 - `way_geometries`
 - `relation_geometries`
 
@@ -143,46 +154,55 @@
 ## テーブルごとの役割
 
 ### nodes
+
 - 地点の本体
 - PointZ を持つ
 - ゲーム属性を持つ
 - version / 作成更新情報 / 論理削除を持つ
 
 ### ways
+
 - Node の順序付き集合
 - 線 / 面の両方を表現
 - `feature_type`, `geometry_kind`, `is_closed` を持つ
 - version / 作成更新情報 / 論理削除を持つ
 
 ### way_nodes
+
 - way と node の接続順序
 - `way_id`, `node_id`, `seq`
 - Node の追加 / 挿入 / 並び替えに対応
 
 ### relations
+
 - 複合オブジェクト
 - 複数 way からなる面やルートなどに使う
 
 ### relation_members
+
 - relation のメンバー管理
 - `member_type`, `member_id`, `seq`, `role`
 
 ### changesets
+
 - 編集のまとまり
 - 編集者、状態、コメント、時刻を持つ
 
 ### way_geometries
+
 - way から再構築した geometry キャッシュ
 - viewport 検索や空間検索に使う
 - `geom`, `bbox`, `source_version`, `refreshed_at` を持つ想定
 
 ### relation_geometries
+
 - relation 由来の geometry キャッシュ
 - multipolygon 等に対応
 
 ---
 
 ## インデックス要件
+
 - `nodes.geom` に空間インデックス
 - `way_geometries.geom` に空間インデックス
 - `way_nodes(way_id, seq)`
@@ -193,6 +213,7 @@
 ---
 
 ## 設計思想の一文まとめ
+
 - **編集の真実は Node / Way / Relation**
 - **geometry は同一 DB 内の補助キャッシュ**
 - **座標は SRID 0 の XYZ**

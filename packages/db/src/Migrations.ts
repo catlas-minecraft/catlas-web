@@ -1,5 +1,3 @@
-import { fileURLToPath } from "node:url"
+import { fileURLToPath } from "node:url";
 
-export const migrationsDirectory = fileURLToPath(
-  new URL("../migrations", import.meta.url)
-)
+export const migrationsDirectory = fileURLToPath(new URL("../migrations", import.meta.url));

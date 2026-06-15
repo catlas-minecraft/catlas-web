@@ -1,6 +1,5 @@
-import { Map, CTileLayer, ViewportLayer, Coordinator, CatlasMap } from "@catlas/leaflet";
+import { CTileLayer, ViewportLayer, Coordinator, CatlasMap } from "@catlas/leaflet";
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
 

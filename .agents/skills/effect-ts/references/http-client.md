@@ -15,15 +15,12 @@ A well-structured HTTP client follows this pattern:
 ```ts
 const makeApiClient = () =>
   HttpApiClient.make(PublicApi, {
-    baseUrl
-  }).pipe(Effect.provide(FetchHttpClient.layer))
+    baseUrl,
+  }).pipe(Effect.provide(FetchHttpClient.layer));
 
-export class ApiClient extends Context.Tag("ApiClient")<
-  ApiClient,
-  PublicApiClient
->() {}
+export class ApiClient extends Context.Tag("ApiClient")<ApiClient, PublicApiClient>() {}
 
-const ApiClientLive = Layer.effect(ApiClient, makeApiClient())
+const ApiClientLive = Layer.effect(ApiClient, makeApiClient());
 ```
 
 Key rules of thumb:

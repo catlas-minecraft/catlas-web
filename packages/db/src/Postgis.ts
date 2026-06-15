@@ -1,24 +1,24 @@
-import { sql } from "kysely"
-import type { GeometryKind, GeometryValue } from "./Database.js"
+import { sql } from "kysely";
+import type { GeometryKind, GeometryValue } from "./Database.js";
 
 export interface Point3DInput {
-  x: number
-  y: number
-  z: number
+  x: number;
+  y: number;
+  z: number;
 }
 
 export interface BBox2DInput {
-  minX: number
-  minY: number
-  maxX: number
-  maxY: number
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 }
 
 export const intersectsBBox2D = (column: string, bbox: BBox2DInput) =>
   sql<boolean>`ST_Intersects(
     ST_Force2D(${sql.ref(column)}),
     ST_MakeEnvelope(${bbox.minX}, ${bbox.minY}, ${bbox.maxX}, ${bbox.maxY}, 0)
-  )`
+  )`;
 
 const makeWayLineGeometry = (wayId: number) =>
   sql<GeometryValue>`(
@@ -30,7 +30,7 @@ const makeWayLineGeometry = (wayId: number) =>
       WHERE way_nodes.way_id = ${wayId}
         AND nodes.deleted_at IS NULL
     ) AS ordered_nodes
-  )`
+  )`;
 
 export const makeWayGeometry = (wayId: number, geometryKind: GeometryKind) =>
   geometryKind === "area"
@@ -47,7 +47,7 @@ export const makeWayGeometry = (wayId: number, geometryKind: GeometryKind) =>
           ) AS ordered_nodes
         ) AS line_source
       )`
-    : makeWayLineGeometry(wayId)
+    : makeWayLineGeometry(wayId);
 
 export const makeMultipolygonRelationGeometry = (relationId: number) =>
   sql<GeometryValue>`(
@@ -72,7 +72,7 @@ export const makeMultipolygonRelationGeometry = (relationId: number) =>
       WHEN (SELECT geom FROM inner_geom) IS NULL THEN (SELECT geom FROM outer_geom)
       ELSE ST_Difference((SELECT geom FROM outer_geom), (SELECT geom FROM inner_geom))
     END
-  )`
+  )`;
 
 export const makeGeometryBBox = (geometry: ReturnType<typeof sql<GeometryValue>>) =>
-  sql<GeometryValue>`ST_Force2D(ST_Envelope(ST_Force2D(${geometry})))`
+  sql<GeometryValue>`ST_Force2D(ST_Envelope(ST_Force2D(${geometry})))`;

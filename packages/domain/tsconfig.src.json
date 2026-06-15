@@ -1,9 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "include": ["src"],
-  "references": [
-    { "path": "../schema" }
-  ],
+  "references": [{ "path": "../schema" }],
   "compilerOptions": {
     "types": ["node"],
     "outDir": "build/src",

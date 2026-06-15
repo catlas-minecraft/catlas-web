@@ -12,11 +12,7 @@ export const SessionSecret = Schema.String.pipe(
     const bytesEither = decodeHex(str);
 
     if (Either.isLeft(bytesEither)) {
-      return new ParseResult.Type(
-        Schema.String.ast,
-        str,
-        bytesEither.left.message,
-      );
+      return new ParseResult.Type(Schema.String.ast, str, bytesEither.left.message);
     }
 
     const bytes = bytesEither.right;
@@ -33,27 +29,18 @@ export const SessionSecretFromString = Schema.transformOrFail(
       decodeHex(inputString).pipe(
         Effect.mapError(
           (error) =>
-            new ParseResult.Type(
-              Schema.Uint8ArrayFromSelf.ast,
-              inputString,
-              error.message,
-            ),
+            new ParseResult.Type(Schema.Uint8ArrayFromSelf.ast, inputString, error.message),
         ),
         Effect.flatMap((bytes) =>
           bytes.length !== 24
             ? Effect.fail(
-                new ParseResult.Type(
-                  Schema.Uint8ArrayFromSelf.ast,
-                  inputString,
-                  "Invalid length",
-                ),
+                new ParseResult.Type(Schema.Uint8ArrayFromSelf.ast, inputString, "Invalid length"),
               )
             : Effect.succeed(bytes),
         ),
       ),
 
-    encode: (domainBytes: Uint8Array) =>
-      ParseResult.succeed(encodeHex(domainBytes)),
+    encode: (domainBytes: Uint8Array) => ParseResult.succeed(encodeHex(domainBytes)),
   },
 );
 

@@ -64,8 +64,12 @@ type NodeSelectRow = {
 };
 
 export interface GeospatialRepositoryService {
-  getNode: (id: number) => Effect.Effect<NodeDetailSnapshot, NotFoundError | GeospatialOperationError>;
-  getWay: (id: number) => Effect.Effect<WayDetailSnapshot, NotFoundError | GeospatialOperationError>;
+  getNode: (
+    id: number,
+  ) => Effect.Effect<NodeDetailSnapshot, NotFoundError | GeospatialOperationError>;
+  getWay: (
+    id: number,
+  ) => Effect.Effect<WayDetailSnapshot, NotFoundError | GeospatialOperationError>;
   getRelation: (
     id: number,
   ) => Effect.Effect<RelationDetailSnapshot, NotFoundError | GeospatialOperationError>;
@@ -1263,201 +1267,204 @@ export const GeospatialRepositoryLive = Layer.effect(
 
     const uploadChangeset = Effect.fn("repository.uploadChangeset")(
       (id: number, input: { actorId: string; payload: ChangesetUploadPayload }) =>
-        db.withTransaction(
-          Effect.gen(function* () {
-            const nodeIdMap = new Map<number, number>();
-            const wayIdMap = new Map<number, number>();
-            const relationIdMap = new Map<number, number>();
+        db
+          .withTransaction(
+            Effect.gen(function* () {
+              const nodeIdMap = new Map<number, number>();
+              const wayIdMap = new Map<number, number>();
+              const relationIdMap = new Map<number, number>();
 
-            const nodeDiffs: Array<DiffResultEntry> = [];
-            const wayDiffs: Array<DiffResultEntry> = [];
-            const relationDiffs: Array<DiffResultEntry> = [];
+              const nodeDiffs: Array<DiffResultEntry> = [];
+              const wayDiffs: Array<DiffResultEntry> = [];
+              const relationDiffs: Array<DiffResultEntry> = [];
 
-            const resolveMappedId = (value: number, idMap: Map<number, number>) =>
-              idMap.get(value) ?? value;
+              const resolveMappedId = (value: number, idMap: Map<number, number>) =>
+                idMap.get(value) ?? value;
 
-            const resolveRelationMember = (member: RelationMemberInput): RelationMemberInput =>
-              new RelationMemberInput({
-                ...member,
-                memberId:
-                  member.memberType === "node"
-                    ? resolveMappedId(member.memberId, nodeIdMap)
-                    : member.memberType === "way"
-                      ? resolveMappedId(member.memberId, wayIdMap)
-                      : resolveMappedId(member.memberId, relationIdMap),
+              const resolveRelationMember = (member: RelationMemberInput): RelationMemberInput =>
+                new RelationMemberInput({
+                  memberType: member.memberType,
+                  memberId:
+                    member.memberType === "node"
+                      ? resolveMappedId(member.memberId, nodeIdMap)
+                      : member.memberType === "way"
+                        ? resolveMappedId(member.memberId, wayIdMap)
+                        : resolveMappedId(member.memberId, relationIdMap),
+                  role: member.role,
+                });
+
+              for (const node of input.payload.create.nodes) {
+                const created = yield* createNode({
+                  actorId: input.actorId,
+                  changesetId: id,
+                  geom: node.geom,
+                  featureType: node.featureType,
+                  tags: node.tags,
+                });
+
+                nodeIdMap.set(node.id, created.id);
+                nodeDiffs.push(
+                  new DiffResultEntry({
+                    oldId: node.id,
+                    newId: created.id,
+                    newVersion: created.version,
+                  }),
+                );
+              }
+
+              for (const way of input.payload.create.ways) {
+                const created = yield* createWay({
+                  actorId: input.actorId,
+                  changesetId: id,
+                  featureType: way.featureType,
+                  geometryKind: way.geometryKind,
+                  nodeRefs: way.nodeRefs.map((nodeRef) => resolveMappedId(nodeRef, nodeIdMap)),
+                  tags: way.tags,
+                });
+
+                wayIdMap.set(way.id, created.id);
+                wayDiffs.push(
+                  new DiffResultEntry({
+                    oldId: way.id,
+                    newId: created.id,
+                    newVersion: created.version,
+                  }),
+                );
+              }
+
+              for (const relation of input.payload.create.relations) {
+                const created = yield* createRelation({
+                  actorId: input.actorId,
+                  changesetId: id,
+                  relationType: relation.relationType,
+                  members: relation.members.map(resolveRelationMember),
+                  tags: relation.tags,
+                });
+
+                relationIdMap.set(relation.id, created.id);
+                relationDiffs.push(
+                  new DiffResultEntry({
+                    oldId: relation.id,
+                    newId: created.id,
+                    newVersion: created.version,
+                  }),
+                );
+              }
+
+              for (const node of input.payload.modify.nodes) {
+                const updated = yield* updateNode(node.id, {
+                  actorId: input.actorId,
+                  expectedVersion: node.expectedVersion,
+                  changesetId: id,
+                  geom: node.geom,
+                  featureType: node.featureType,
+                  tags: node.tags,
+                });
+
+                nodeDiffs.push(
+                  new DiffResultEntry({
+                    oldId: node.id,
+                    newId: updated.id,
+                    newVersion: updated.version,
+                  }),
+                );
+              }
+
+              for (const way of input.payload.modify.ways) {
+                const updated = yield* updateWay(way.id, {
+                  actorId: input.actorId,
+                  expectedVersion: way.expectedVersion,
+                  changesetId: id,
+                  featureType: way.featureType,
+                  geometryKind: way.geometryKind,
+                  nodeRefs: way.nodeRefs.map((nodeRef) => resolveMappedId(nodeRef, nodeIdMap)),
+                  tags: way.tags,
+                });
+
+                wayDiffs.push(
+                  new DiffResultEntry({
+                    oldId: way.id,
+                    newId: updated.id,
+                    newVersion: updated.version,
+                  }),
+                );
+              }
+
+              for (const relation of input.payload.modify.relations) {
+                const updated = yield* updateRelation(relation.id, {
+                  actorId: input.actorId,
+                  expectedVersion: relation.expectedVersion,
+                  changesetId: id,
+                  relationType: relation.relationType,
+                  members: relation.members.map(resolveRelationMember),
+                  tags: relation.tags,
+                });
+
+                relationDiffs.push(
+                  new DiffResultEntry({
+                    oldId: relation.id,
+                    newId: updated.id,
+                    newVersion: updated.version,
+                  }),
+                );
+              }
+
+              for (const relation of input.payload.delete.relations) {
+                yield* deleteRelation(relation.id, {
+                  actorId: input.actorId,
+                  expectedVersion: relation.expectedVersion,
+                  changesetId: id,
+                });
+
+                relationDiffs.push(
+                  new DiffResultEntry({
+                    oldId: relation.id,
+                    newId: relation.id,
+                    newVersion: relation.expectedVersion + 1,
+                  }),
+                );
+              }
+
+              for (const way of input.payload.delete.ways) {
+                yield* deleteWay(way.id, {
+                  actorId: input.actorId,
+                  expectedVersion: way.expectedVersion,
+                  changesetId: id,
+                });
+
+                wayDiffs.push(
+                  new DiffResultEntry({
+                    oldId: way.id,
+                    newId: way.id,
+                    newVersion: way.expectedVersion + 1,
+                  }),
+                );
+              }
+
+              for (const node of input.payload.delete.nodes) {
+                yield* deleteNode(node.id, {
+                  actorId: input.actorId,
+                  expectedVersion: node.expectedVersion,
+                  changesetId: id,
+                });
+
+                nodeDiffs.push(
+                  new DiffResultEntry({
+                    oldId: node.id,
+                    newId: node.id,
+                    newVersion: node.expectedVersion + 1,
+                  }),
+                );
+              }
+
+              return new ChangesetUploadDiffResult({
+                nodes: nodeDiffs,
+                ways: wayDiffs,
+                relations: relationDiffs,
               });
-
-            for (const node of input.payload.create.nodes) {
-              const created = yield* createNode({
-                actorId: input.actorId,
-                changesetId: id,
-                geom: node.geom,
-                featureType: node.featureType,
-                tags: node.tags,
-              });
-
-              nodeIdMap.set(node.id, created.id);
-              nodeDiffs.push(
-                new DiffResultEntry({
-                  oldId: node.id,
-                  newId: created.id,
-                  newVersion: created.version,
-                }),
-              );
-            }
-
-            for (const way of input.payload.create.ways) {
-              const created = yield* createWay({
-                actorId: input.actorId,
-                changesetId: id,
-                featureType: way.featureType,
-                geometryKind: way.geometryKind,
-                nodeRefs: way.nodeRefs.map((nodeRef) => resolveMappedId(nodeRef, nodeIdMap)),
-                tags: way.tags,
-              });
-
-              wayIdMap.set(way.id, created.id);
-              wayDiffs.push(
-                new DiffResultEntry({
-                  oldId: way.id,
-                  newId: created.id,
-                  newVersion: created.version,
-                }),
-              );
-            }
-
-            for (const relation of input.payload.create.relations) {
-              const created = yield* createRelation({
-                actorId: input.actorId,
-                changesetId: id,
-                relationType: relation.relationType,
-                members: relation.members.map(resolveRelationMember),
-                tags: relation.tags,
-              });
-
-              relationIdMap.set(relation.id, created.id);
-              relationDiffs.push(
-                new DiffResultEntry({
-                  oldId: relation.id,
-                  newId: created.id,
-                  newVersion: created.version,
-                }),
-              );
-            }
-
-            for (const node of input.payload.modify.nodes) {
-              const updated = yield* updateNode(node.id, {
-                actorId: input.actorId,
-                expectedVersion: node.expectedVersion,
-                changesetId: id,
-                geom: node.geom,
-                featureType: node.featureType,
-                tags: node.tags,
-              });
-
-              nodeDiffs.push(
-                new DiffResultEntry({
-                  oldId: node.id,
-                  newId: updated.id,
-                  newVersion: updated.version,
-                }),
-              );
-            }
-
-            for (const way of input.payload.modify.ways) {
-              const updated = yield* updateWay(way.id, {
-                actorId: input.actorId,
-                expectedVersion: way.expectedVersion,
-                changesetId: id,
-                featureType: way.featureType,
-                geometryKind: way.geometryKind,
-                nodeRefs: way.nodeRefs.map((nodeRef) => resolveMappedId(nodeRef, nodeIdMap)),
-                tags: way.tags,
-              });
-
-              wayDiffs.push(
-                new DiffResultEntry({
-                  oldId: way.id,
-                  newId: updated.id,
-                  newVersion: updated.version,
-                }),
-              );
-            }
-
-            for (const relation of input.payload.modify.relations) {
-              const updated = yield* updateRelation(relation.id, {
-                actorId: input.actorId,
-                expectedVersion: relation.expectedVersion,
-                changesetId: id,
-                relationType: relation.relationType,
-                members: relation.members.map(resolveRelationMember),
-                tags: relation.tags,
-              });
-
-              relationDiffs.push(
-                new DiffResultEntry({
-                  oldId: relation.id,
-                  newId: updated.id,
-                  newVersion: updated.version,
-                }),
-              );
-            }
-
-            for (const relation of input.payload.delete.relations) {
-              yield* deleteRelation(relation.id, {
-                actorId: input.actorId,
-                expectedVersion: relation.expectedVersion,
-                changesetId: id,
-              });
-
-              relationDiffs.push(
-                new DiffResultEntry({
-                  oldId: relation.id,
-                  newId: relation.id,
-                  newVersion: relation.expectedVersion + 1,
-                }),
-              );
-            }
-
-            for (const way of input.payload.delete.ways) {
-              yield* deleteWay(way.id, {
-                actorId: input.actorId,
-                expectedVersion: way.expectedVersion,
-                changesetId: id,
-              });
-
-              wayDiffs.push(
-                new DiffResultEntry({
-                  oldId: way.id,
-                  newId: way.id,
-                  newVersion: way.expectedVersion + 1,
-                }),
-              );
-            }
-
-            for (const node of input.payload.delete.nodes) {
-              yield* deleteNode(node.id, {
-                actorId: input.actorId,
-                expectedVersion: node.expectedVersion,
-                changesetId: id,
-              });
-
-              nodeDiffs.push(
-                new DiffResultEntry({
-                  oldId: node.id,
-                  newId: node.id,
-                  newVersion: node.expectedVersion + 1,
-                }),
-              );
-            }
-
-            return new ChangesetUploadDiffResult({
-              nodes: nodeDiffs,
-              ways: wayDiffs,
-              relations: relationDiffs,
-            });
-          }),
-        ).pipe(Effect.mapError(normalizeChangesetUploadError)),
+            }),
+          )
+          .pipe(Effect.mapError(normalizeChangesetUploadError)),
     );
 
     const getNode = Effect.fn("repository.getNode")((id: number) =>
@@ -1471,9 +1478,7 @@ export const GeospatialRepositoryLive = Layer.effect(
         const way = yield* loadWayById(id);
         const wayNodes = yield* loadWayNodesByWayId(id);
         const orderedNodeIds = [
-          ...new Set(
-            [...wayNodes].sort((a, b) => a.seq - b.seq).map((wayNode) => wayNode.node_id),
-          ),
+          ...new Set([...wayNodes].sort((a, b) => a.seq - b.seq).map((wayNode) => wayNode.node_id)),
         ];
         const nodes = yield* Effect.forEach(orderedNodeIds, (nodeId) => loadNodeById(nodeId));
 

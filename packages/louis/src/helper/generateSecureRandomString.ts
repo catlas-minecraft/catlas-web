@@ -1,3 +1,4 @@
+import { randomFillSync } from "node:crypto";
 import { generateRandomString } from "@oslojs/crypto/random";
 
 // 10-characters long string consisting of upper case letters
@@ -6,7 +7,7 @@ export const generateSecureRandomString = () => {
   return generateRandomString(
     {
       read(bytes) {
-        crypto.getRandomValues(bytes);
+        randomFillSync(bytes);
       },
     },
     alphabet,

@@ -75,7 +75,9 @@ export const ChangesetsApiLive = HttpApiBuilder.group(Api, "changesets", (handle
           Effect.flatMap(({ actorId }) => repository.uploadChangeset(id, { actorId, payload })),
         ),
       )
-      .handle("closeChangeset", ({ path: { id } }) => repository.closeChangeset(id).pipe(Effect.asVoid));
+      .handle("closeChangeset", ({ path: { id } }) =>
+        repository.closeChangeset(id).pipe(Effect.asVoid),
+      );
   }),
 );
 

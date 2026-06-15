@@ -40,9 +40,7 @@ export const parseSessionToken = Effect.fn(function* (token: SessionToken) {
         }),
     ),
   );
-  const sessionSecret = yield* Schema.decode(SessionSecret.SessionSecret)(
-    rawSecret,
-  ).pipe(
+  const sessionSecret = yield* Schema.decode(SessionSecret.SessionSecret)(rawSecret).pipe(
     Effect.mapError(
       (error) =>
         new InvalidSessionTokenError({

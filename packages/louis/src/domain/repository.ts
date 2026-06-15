@@ -16,9 +16,7 @@ export interface SessionRepositoryInterface<UserId extends string> {
     sessionId: SessionId.SessionId,
   ): Effect.Effect<Option.Option<DatabaseSession<UserId>>, UnknownRepositoryError>;
 
-  getUserSessions(
-    userId: UserId,
-  ): Effect.Effect<DatabaseSession<UserId>[], UnknownRepositoryError>;
+  getUserSessions(userId: UserId): Effect.Effect<DatabaseSession<UserId>[], UnknownRepositoryError>;
 
   setSession(
     id: SessionId.SessionId,

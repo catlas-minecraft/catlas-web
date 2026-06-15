@@ -1,8 +1,6 @@
 import { Schema } from "effect";
 
-export const SessionJwtBrand = Symbol(
-  "@baketsu/louis/model/session/value-object/session-jwt",
-);
+export const SessionJwtBrand = Symbol("@baketsu/louis/model/session/value-object/session-jwt");
 
 /**
  * JWT token schema with brand type

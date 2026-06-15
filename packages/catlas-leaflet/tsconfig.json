@@ -1,20 +1,12 @@
 {
   "compilerOptions": {
     "target": "esnext",
-    "lib": [
-      "es2023",
-      "DOM",
-      "ESNext.Array",
-      "DOM.Iterable",
-      "ESNext.Iterator"
-    ],
+    "lib": ["es2023", "DOM", "ESNext.Array", "DOM.Iterable", "ESNext.Iterator"],
     "moduleDetection": "force",
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "resolveJsonModule": true,
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "strict": true,
     "noUnusedLocals": true,
     "declaration": true,
@@ -24,9 +16,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "jsx": "react-jsx",
+    "jsx": "react-jsx"
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

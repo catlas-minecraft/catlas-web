@@ -33,8 +33,8 @@ Use this as the baseline shape for typed clients:
 ```ts
 const makeApiClient = () =>
   HttpApiClient.make(PublicApi, {
-    baseUrl
-  }).pipe(Effect.provide(FetchHttpClient.layer))
+    baseUrl,
+  }).pipe(Effect.provide(FetchHttpClient.layer));
 ```
 
 Then expose the client through `Context.Tag`, build a `Layer`, and let callers depend on the service instead of a global singleton.
