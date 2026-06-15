@@ -3,7 +3,6 @@
   "js/ts.preferences.importModuleSpecifier": "relative",
   "js/ts.tsdk.promptToUseWorkspaceVersion": true,
   "editor.formatOnSave": true,
-  "eslint.format.enable": true,
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   },
@@ -24,14 +23,7 @@
   "[typescriptreact]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
-  "eslint.validate": [
-    "markdown",
-    "javascript",
-    "typescript"
-  ],
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
-  },
+
   "editor.quickSuggestions": {
     "other": true,
     "comments": false,
@@ -47,11 +39,5 @@
   "editor.wordBasedSuggestions": "matchingDocuments",
   "editor.parameterHints.enabled": true,
   "files.insertFinalNewline": true,
-  "cSpell.words": [
-    "Bbox",
-    "Catlas",
-    "Geospatial",
-    "Kysely",
-    "moveend"
-  ]
+  "cSpell.words": ["Bbox", "Catlas", "Geospatial", "Kysely", "moveend"]
 }

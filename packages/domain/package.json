@@ -1,14 +1,14 @@
 {
   "name": "@catlas/domain",
   "version": "0.0.0",
-  "type": "module",
-  "license": "MIT",
   "description": "The domain template",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "<PLACEHOLDER>",
     "directory": "packages/domain"
   },
+  "type": "module",
   "publishConfig": {
     "access": "public",
     "directory": "dist"
@@ -20,13 +20,13 @@
     "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "check": "tsc -b tsconfig.json",
-    "test": "vitest",
-    "coverage": "vitest --coverage"
+    "test": "vp test",
+    "coverage": "vp test --coverage"
   },
   "dependencies": {
+    "@catlas/schema": "workspace:^",
     "@effect/platform": "0.96.0",
     "@effect/sql": "0.51.0",
-    "@catlas/schema": "workspace:^",
     "effect": "3.21.0"
   },
   "effect": {

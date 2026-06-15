@@ -1,642 +1,819 @@
+import * as d3 from "d3";
+import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
+import { addEntities, insertNodeIntoWay, moveNode, updateEntityProperties } from "./editor/actions";
+import { EditorApi, EditorApiError, EditorApiLive } from "./editor/api-client";
+import {
+  clearStoredAuthSession,
+  readStoredAuthSession,
+  storedSessionFromCreated,
+  storedSessionFromVerified,
+  type StoredAuthSession,
+  writeStoredAuthSession,
+} from "./editor/auth";
+import { History } from "./editor/history";
+import { getOperation, type Operation, type OperationId } from "./editor/operations";
+import {
+  DEFAULT_PRESETS,
+  defaultPresetForGeometry,
+  presetForFeature,
+  snapPoint,
+} from "./editor/presets";
+import { EntitySvgLayer } from "./editor/renderer";
+import { loadViewportEntities, saveGraph } from "./editor/sync";
+import { TileCanvasLayer } from "./editor/tiles";
 import type {
-  NodeDetailSnapshot,
-  NodeSnapshot,
-  ViewportSnapshot,
-  WayDetailSnapshot,
-  WayNodeSnapshot,
-  WaySnapshot,
-} from "@catlas/domain";
-import type { LatLngBounds, LatLngTuple } from "leaflet";
+  DrawingState,
+  EditorAuthState,
+  EditorMode,
+  EditorSaveState,
+  EditorSnapshot,
+  EntityRef,
+  Point3D,
+  PresetDefinition,
+  SnapPolicy,
+} from "./editor/types";
+import { entityKey, geometryTypeForEntity, sameEntityRef } from "./editor/types";
+import {
+  createSvgElement,
+  getElementSize,
+  getInitialTransform,
+  getViewportBbox,
+  getViewportExtent,
+  getZoomScaleExtent,
+  screenToWorld,
+} from "./editor/util";
+import { validateGraph } from "./editor/validation";
 
-export type SelectedEntity =
-  | {
-      type: "node";
-      id: number;
+export type CatlasEditorOptions = {
+  readonly apiBaseUrl?: string;
+  readonly tileUrl?: string;
+  readonly presets?: readonly PresetDefinition[];
+};
+
+type ActiveDrag = {
+  readonly captureTarget: Element;
+  readonly nodeId: number;
+  readonly pointerId: number;
+  readonly start: Point3D;
+  current: Point3D;
+};
+
+const modeGeometry = (mode: EditorMode) => {
+  if (mode === "add-point") return "point";
+  if (mode === "draw-line") return "line";
+  if (mode === "draw-area") return "area";
+  return null;
+};
+
+const compactErrorMessage = (message: string) => {
+  let compact = message;
+  if (message.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(message) as { readonly message?: unknown };
+      if (typeof parsed.message === "string") compact = parsed.message;
+    } catch {
+      // Keep the original message when it is not valid JSON.
     }
-  | {
-      type: "way";
-      id: number;
-    };
-
-export type ActiveDrag =
-  | {
-      type: "node";
-      entityId: number;
-      x: number;
-      z: number;
-    }
-  | {
-      type: "way-vertex";
-      wayId: number;
-      vertexIndex: number;
-      x: number;
-      z: number;
-    };
-
-export type TagRow = {
-  id: string;
-  key: string;
-  value: string;
-};
-
-export type NodeDraft = {
-  type: "node";
-  id: number;
-  version: number;
-  featureType: string;
-  x: number;
-  y: number;
-  z: number;
-  tags: TagRow[];
-  source: NodeSnapshot;
-};
-
-export type WayVertexDraft = {
-  id: string;
-  nodeId: number | null;
-  version: number | null;
-  featureType: string;
-  x: number;
-  y: number;
-  z: number;
-  tags: Record<string, string>;
-  isNew: boolean;
-};
-
-export type WayDraft = {
-  type: "way";
-  id: number;
-  version: number;
-  featureType: string;
-  geometryKind: "line" | "area";
-  isClosed: boolean;
-  tags: TagRow[];
-  vertices: WayVertexDraft[];
-  source: WayDetailSnapshot;
-};
-
-export type EditorDraft = NodeDraft | WayDraft;
-
-export type RenderedNode = NodeSnapshot & {
-  coordinate: LatLngTuple;
-};
-
-export type RenderedWay = WaySnapshot & {
-  nodeIds: number[];
-  coordinates: LatLngTuple[];
-};
-
-export type NormalizedViewport = {
-  nodesById: Map<number, NodeSnapshot>;
-  waysById: Map<number, WaySnapshot>;
-  renderedNodes: RenderedNode[];
-  renderedWays: RenderedWay[];
-};
-
-type ApiError = Error & {
-  status?: number;
-};
-
-const createTagId = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
   }
-
-  return Math.random().toString(36).slice(2);
+  if (compact.includes("502 GET") || compact.includes("ECONNREFUSED")) {
+    return "The Catlas API is unavailable. You can continue editing locally and retry later.";
+  }
+  return compact;
 };
 
-const createSyntheticTimestamp = () => Date.now();
-
-const toCoordinate = (node: { geom: { x: number; z: number } }): LatLngTuple => [
-  node.geom.z,
-  node.geom.x,
-];
-
-export const rowsToTags = (rows: TagRow[]) =>
-  rows.reduce<Record<string, string>>((acc, row) => {
-    const key = row.key.trim();
-    const value = row.value.trim();
-
-    if (key.length === 0) {
-      return acc;
-    }
-
-    acc[key] = value;
-    return acc;
-  }, {});
-
-const tagsToRows = (tags: Record<string, string>): TagRow[] => {
-  const entries = Object.entries(tags).sort(([left], [right]) => left.localeCompare(right));
-
-  if (entries.length === 0) {
-    return [{ id: createTagId(), key: "", value: "" }];
+const errorMessage = (error: unknown) => {
+  if (error instanceof Error) return compactErrorMessage(error.message);
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return compactErrorMessage(String(error.message));
   }
-
-  return entries.map(([key, value]) => ({
-    id: createTagId(),
-    key,
-    value,
-  }));
+  return "An unexpected error occurred.";
 };
 
-export const createBlankTag = (): TagRow => ({
-  id: createTagId(),
-  key: "",
-  value: "",
-});
+export class CatlasEditor {
+  readonly #apiRuntime;
+  readonly #history = new History();
+  readonly #listeners = new Set<() => void>();
+  readonly #overlay: d3.Selection<SVGSVGElement, unknown, null, undefined>;
+  readonly #presets: readonly PresetDefinition[];
+  readonly #renderer: EntitySvgLayer;
+  readonly #resizeObserver: ResizeObserver;
+  readonly #root: HTMLDivElement;
+  readonly #tiles: TileCanvasLayer;
+  readonly #zoom: d3.ZoomBehavior<SVGSVGElement, unknown>;
+  #activeDrag: ActiveDrag | null = null;
+  #authSession: StoredAuthSession | null = null;
+  #authState: EditorAuthState = { status: "anonymous" };
+  #disposed = false;
+  #drawing: DrawingState | null = null;
+  #loadError: string | null = null;
+  #loading = true;
+  #mode: EditorMode = "browse";
+  #nextLocalNodeId = -1;
+  #nextLocalWayId = -1;
+  #requestId = 0;
+  #saveState: EditorSaveState = { status: "idle" };
+  #selection: EntityRef | null = null;
+  #snapshot: EditorSnapshot;
+  #transform: d3.ZoomTransform;
+  #transientNode: { readonly id: number; readonly geom: Point3D } | null = null;
 
-export const cloneNodeDraft = (draft: NodeDraft): NodeDraft => ({
-  ...draft,
-  tags: draft.tags.map((tag) => ({ ...tag })),
-  source: {
-    ...draft.source,
-    geom: { ...draft.source.geom },
-    tags: { ...draft.source.tags },
-  },
-});
-
-export const cloneWayDraft = (draft: WayDraft): WayDraft => ({
-  ...draft,
-  tags: draft.tags.map((tag) => ({ ...tag })),
-  vertices: draft.vertices.map((vertex) => ({
-    ...vertex,
-    tags: { ...vertex.tags },
-  })),
-  source: {
-    ...draft.source,
-    way: {
-      ...draft.source.way,
-      tags: { ...draft.source.way.tags },
-    },
-    nodes: draft.source.nodes.map((node) => ({
-      ...node,
-      geom: { ...node.geom },
-      tags: { ...node.tags },
-    })),
-    wayNodes: draft.source.wayNodes.map((wayNode) => ({ ...wayNode })),
-  },
-});
-
-export const createNodeSnapshot = ({
-  id,
-  version,
-  featureType,
-  x,
-  y,
-  z,
-  tags,
-  fallback,
-}: {
-  id: number;
-  version: number;
-  featureType: string;
-  x: number;
-  y: number;
-  z: number;
-  tags: Record<string, string>;
-  fallback?: NodeSnapshot;
-}): NodeSnapshot => ({
-  id,
-  version,
-  featureType,
-  geom: { x, y, z },
-  tags,
-  createdAt: fallback?.createdAt ?? createSyntheticTimestamp(),
-  updatedAt: fallback?.updatedAt ?? createSyntheticTimestamp(),
-  createdBy: fallback?.createdBy ?? "local",
-  updatedBy: fallback?.updatedBy ?? "local",
-  deletedAt: null,
-  changesetId: fallback?.changesetId ?? 0,
-});
-
-export const createNodeDraft = (detail: NodeDetailSnapshot): NodeDraft => ({
-  type: "node",
-  id: detail.node.id,
-  version: detail.node.version,
-  featureType: detail.node.featureType,
-  x: detail.node.geom.x,
-  y: detail.node.geom.y,
-  z: detail.node.geom.z,
-  tags: tagsToRows(detail.node.tags),
-  source: detail.node,
-});
-
-export const createWayDraft = (detail: WayDetailSnapshot): WayDraft => {
-  const orderedWayNodes = [...detail.wayNodes].sort((left, right) => left.seq - right.seq);
-  const nodeById = new Map(detail.nodes.map((node) => [node.id, node]));
-  const vertices = orderedWayNodes.reduce<WayVertexDraft[]>((acc, wayNode, index) => {
-    const node = nodeById.get(wayNode.nodeId);
-
-    if (!node) {
-      return acc;
-    }
-
-    acc.push({
-      id: `${wayNode.id}-${index}`,
-      nodeId: node.id,
-      version: node.version,
-      featureType: node.featureType,
-      x: node.geom.x,
-      y: node.geom.y,
-      z: node.geom.z,
-      tags: { ...node.tags },
-      isNew: false,
-    });
-
-    return acc;
-  }, []);
-
-  return {
-    type: "way",
-    id: detail.way.id,
-    version: detail.way.version,
-    featureType: detail.way.featureType,
-    geometryKind: detail.way.geometryKind,
-    isClosed: detail.way.isClosed,
-    tags: tagsToRows(detail.way.tags),
-    vertices,
-    source: detail,
-  };
-};
-
-export const overlayNodeDraftsOnWayDetail = (
-  detail: WayDetailSnapshot,
-  nodeDraftsById: Map<number, NodeDraft>,
-): WayDetailSnapshot => ({
-  way: {
-    ...detail.way,
-    tags: { ...detail.way.tags },
-  },
-  nodes: detail.nodes.map((node) => {
-    const overlay = nodeDraftsById.get(node.id);
-
-    if (!overlay) {
-      return {
-        ...node,
-        geom: { ...node.geom },
-        tags: { ...node.tags },
-      };
-    }
-
-    return createNodeSnapshot({
-      id: overlay.id,
-      version: overlay.version,
-      featureType: overlay.featureType,
-      x: overlay.x,
-      y: overlay.y,
-      z: overlay.z,
-      tags: rowsToTags(overlay.tags),
-      fallback: overlay.source,
-    });
-  }),
-  wayNodes: detail.wayNodes.map((wayNode) => ({ ...wayNode })),
-});
-
-export const overlayNodeDraftsOnWayDraft = (
-  draft: WayDraft,
-  nodeDraftsById: Map<number, NodeDraft>,
-): WayDraft => {
-  const nextDraft = cloneWayDraft(draft);
-
-  nextDraft.vertices = nextDraft.vertices.map((vertex) => {
-    if (vertex.nodeId === null) {
-      return vertex;
-    }
-
-    const overlay = nodeDraftsById.get(vertex.nodeId);
-
-    if (!overlay) {
-      return vertex;
-    }
-
-    return {
-      ...vertex,
-      featureType: overlay.featureType,
-      x: overlay.x,
-      y: overlay.y,
-      z: overlay.z,
-      tags: rowsToTags(overlay.tags),
-    };
-  });
-
-  nextDraft.source = overlayNodeDraftsOnWayDetail(nextDraft.source, nodeDraftsById);
-
-  return nextDraft;
-};
-
-export const getDraftKey = (selection: SelectedEntity | null) =>
-  selection ? `${selection.type}:${selection.id}` : null;
-
-export const getVisibleWayVertices = (draft: WayDraft) => {
-  if (!draft.isClosed || draft.vertices.length <= 1) {
-    return draft.vertices;
-  }
-
-  const first = draft.vertices[0];
-  const last = draft.vertices[draft.vertices.length - 1];
-
-  if (!first || !last || first.nodeId !== last.nodeId) {
-    return draft.vertices;
-  }
-
-  return draft.vertices.slice(0, -1);
-};
-
-export const rebuildClosedVertices = (draft: WayDraft, visibleVertices: WayVertexDraft[]) => {
-  if (!draft.isClosed) {
-    return visibleVertices;
-  }
-
-  if (visibleVertices.length === 0) {
-    return visibleVertices;
-  }
-
-  const first = visibleVertices[0]!;
-
-  return [
-    ...visibleVertices,
-    {
-      ...first,
-      id: `${first.id}-closing`,
-    },
-  ];
-};
-
-const copyVertex = (vertex: WayVertexDraft): WayVertexDraft => ({
-  ...vertex,
-  tags: { ...vertex.tags },
-});
-
-export const applyWayVertexCoordinate = (
-  draft: WayDraft,
-  vertexIndex: number,
-  coordinate: { x: number; z: number },
-) => {
-  const visible = getVisibleWayVertices(draft).map(copyVertex);
-  const target = visible[vertexIndex];
-
-  if (!target) {
-    return draft;
-  }
-
-  const nextVisible = visible.map((vertex) => {
-    if (target.nodeId !== null && vertex.nodeId === target.nodeId) {
-      return {
-        ...vertex,
-        x: coordinate.x,
-        z: coordinate.z,
-      };
-    }
-
-    if (vertex.id === target.id) {
-      return {
-        ...vertex,
-        x: coordinate.x,
-        z: coordinate.z,
-      };
-    }
-
-    return vertex;
-  });
-
-  return {
-    ...draft,
-    vertices: rebuildClosedVertices(draft, nextVisible),
-  };
-};
-
-export const applyActiveDragToDraft = (
-  draft: EditorDraft | null,
-  activeDrag: ActiveDrag | null,
-): EditorDraft | null => {
-  if (!draft || !activeDrag) {
-    return draft;
-  }
-
-  if (draft.type === "node" && activeDrag.type === "node" && activeDrag.entityId === draft.id) {
-    return {
-      ...draft,
-      x: activeDrag.x,
-      z: activeDrag.z,
-    };
-  }
-
-  if (draft.type === "way" && activeDrag.type === "way-vertex" && activeDrag.wayId === draft.id) {
-    return applyWayVertexCoordinate(draft, activeDrag.vertexIndex, {
-      x: activeDrag.x,
-      z: activeDrag.z,
-    });
-  }
-
-  return draft;
-};
-
-export const geometryFromDraft = (draft: WayDraft): LatLngTuple[] => {
-  const vertices = getVisibleWayVertices(draft).map(
-    (vertex) => [vertex.z, vertex.x] as LatLngTuple,
-  );
-
-  if (!draft.isClosed || vertices.length === 0) {
-    return vertices;
-  }
-
-  return [...vertices, vertices[0]!];
-};
-
-const coordinatesFromWayDraft = (
-  way: WayDraft,
-  nodesById: Map<number, NodeSnapshot>,
-): LatLngTuple[] => {
-  const coordinates = getVisibleWayVertices(way).map((vertex) => {
-    if (vertex.nodeId !== null) {
-      const node = nodesById.get(vertex.nodeId);
-
-      if (node) {
-        return toCoordinate(node);
-      }
-    }
-
-    return [vertex.z, vertex.x] as LatLngTuple;
-  });
-
-  if (!way.isClosed || coordinates.length === 0) {
-    return coordinates;
-  }
-
-  return [...coordinates, coordinates[0]!];
-};
-
-export const createRenderableViewport = (
-  snapshot?: ViewportSnapshot,
-  draft: EditorDraft | null = null,
-): NormalizedViewport => {
-  if (!snapshot) {
-    return {
-      nodesById: new Map(),
-      waysById: new Map(),
-      renderedNodes: [],
-      renderedWays: [],
-    };
-  }
-
-  const visibleNodes = snapshot.nodes.filter((node) => node.deletedAt === null);
-  const visibleWays = snapshot.ways.filter((way) => way.deletedAt === null);
-  const nodesById = new Map(visibleNodes.map((node) => [node.id, node]));
-
-  if (draft?.type === "node") {
-    nodesById.set(
-      draft.id,
-      createNodeSnapshot({
-        id: draft.id,
-        version: draft.version,
-        featureType: draft.featureType,
-        x: draft.x,
-        y: draft.y,
-        z: draft.z,
-        tags: rowsToTags(draft.tags),
-        fallback: draft.source,
-      }),
+  constructor(root: HTMLDivElement, options: CatlasEditorOptions = {}) {
+    this.#root = root;
+    this.#presets = options.presets ?? DEFAULT_PRESETS;
+    this.#authSession = readStoredAuthSession();
+    this.#authState = this.#authSession ? { status: "checking" } : { status: "anonymous" };
+    this.#apiRuntime = ManagedRuntime.make(
+      EditorApiLive(
+        options.apiBaseUrl ?? window.location.origin,
+        () => this.#authSession?.sessionJwt ?? null,
+      ),
     );
+    this.#tiles = new TileCanvasLayer(root, options.tileUrl);
+
+    const overlay = createSvgElement();
+    overlay.setAttribute("aria-label", "Catlas game map editor");
+    overlay.setAttribute("role", "application");
+    overlay.tabIndex = 0;
+    root.append(overlay);
+    this.#overlay = d3.select(overlay);
+    this.#renderer = new EntitySvgLayer(overlay, {
+      onEntityPointerDown: (event, entity) => this.#handleEntityPointerDown(event, entity),
+      onMidpointPointerDown: (event, wayId, insertionIndex, point) =>
+        this.#handleMidpointPointerDown(event, wayId, insertionIndex, point),
+    });
+
+    const size = getElementSize(root);
+    this.#transform = getInitialTransform(size);
+    this.#zoom = d3
+      .zoom<SVGSVGElement, unknown>()
+      .scaleExtent(getZoomScaleExtent())
+      .extent(getViewportExtent(size))
+      .filter((event) => {
+        const target = event.target as Element | null;
+        return (
+          !target?.closest?.("[data-interactive='true']") &&
+          (event.type === "wheel" || event.button === 0)
+        );
+      })
+      .on("zoom", (event) => {
+        this.#transform = event.transform;
+        this.#tiles.setTransform(this.#transform);
+        this.#render();
+      })
+      .on("end", () => void this.#loadViewport());
+
+    this.#overlay.call(this.#zoom);
+    this.#zoom.transform(this.#overlay, this.#transform);
+    this.#overlay.on("dblclick.zoom", null);
+    this.#overlay.on("click.editor", (event: MouseEvent) => this.#handleCanvasClick(event));
+    this.#overlay.on("dblclick.editor", (event: MouseEvent) => {
+      event.preventDefault();
+      if (this.#mode === "draw-line") this.finishDrawing();
+    });
+    this.#overlay.on("pointermove.editor", (event: PointerEvent) => this.#handlePointerMove(event));
+    this.#overlay.on("pointerup.editor pointercancel.editor", (event: PointerEvent) =>
+      this.#handlePointerUp(event),
+    );
+    this.#overlay.on("keydown.editor", (event: KeyboardEvent) => this.#handleKeyDown(event));
+
+    this.#resizeObserver = new ResizeObserver(() => {
+      const nextSize = getElementSize(root);
+      this.#zoom.extent(getViewportExtent(nextSize));
+      this.#tiles.resize();
+      this.#tiles.setTransform(this.#transform);
+      this.#render();
+    });
+    this.#resizeObserver.observe(root);
+    this.#tiles.setTransform(this.#transform);
+    this.#snapshot = this.#createSnapshot();
+    this.#render();
+    if (this.#authSession) void this.#verifyStoredSession();
+    void this.#loadViewport();
   }
 
-  if (draft?.type === "way") {
-    for (const vertex of draft.vertices) {
-      if (vertex.nodeId === null) {
-        continue;
-      }
+  readonly getSnapshot = () => this.#snapshot;
 
-      nodesById.set(
-        vertex.nodeId,
-        createNodeSnapshot({
-          id: vertex.nodeId,
-          version: vertex.version ?? 0,
-          featureType: vertex.featureType,
-          x: vertex.x,
-          y: vertex.y,
-          z: vertex.z,
-          tags: vertex.tags,
-          fallback: nodesById.get(vertex.nodeId),
-        }),
+  readonly subscribe = (listener: () => void) => {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  };
+
+  get presets() {
+    return this.#presets;
+  }
+
+  operation(id: OperationId): Operation {
+    const operation = getOperation(id, this.#history.graph, this.#selection);
+    return {
+      id: operation.id,
+      label: operation.label,
+      available: operation.available,
+      disabledReason: operation.disabledReason,
+      execute: () => {
+        if (!operation.action) return;
+        if (this.#history.perform(operation.action, operation.annotation)) {
+          this.#selection = null;
+          this.#emit();
+        }
+      },
+    };
+  }
+
+  setMode(mode: EditorMode) {
+    if (mode === this.#mode) return;
+    this.#mode = mode;
+    const geometry = modeGeometry(mode);
+    this.#drawing =
+      geometry === "line" || geometry === "area"
+        ? { geometryKind: geometry, vertices: [], pointer: null }
+        : null;
+    this.#transientNode = null;
+    this.#emit();
+  }
+
+  select(entity: EntityRef | null) {
+    const nextSelection = entity && this.#history.graph.has(entity) ? entity : null;
+    if (sameEntityRef(this.#selection, nextSelection)) return;
+    this.#selection = nextSelection;
+    this.#emit();
+  }
+
+  undo() {
+    if (!this.#history.undo()) return;
+    this.#repairSelection();
+    this.#emit();
+  }
+
+  redo() {
+    if (!this.#history.redo()) return;
+    this.#repairSelection();
+    this.#emit();
+  }
+
+  deleteSelection() {
+    this.operation("delete").execute();
+  }
+
+  async login(userId: string) {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId || this.#authState.status === "authenticating") return;
+
+    this.#authState = { status: "authenticating" };
+    this.#emit();
+    try {
+      const session = await this.#runApi(
+        EditorApi.pipe(Effect.flatMap((api) => api.createSession(normalizedUserId))),
+      );
+      this.#setAuthSession(storedSessionFromCreated(session));
+      this.#saveState = this.#saveState.status === "error" ? { status: "idle" } : this.#saveState;
+      this.#emit();
+    } catch (error) {
+      this.#authState = { status: "error", message: errorMessage(error) };
+      this.#emit();
+    }
+  }
+
+  async logout() {
+    const sessionJwt = this.#authSession?.sessionJwt;
+    this.#clearAuthSession();
+    this.#emit();
+    if (!sessionJwt) return;
+
+    try {
+      await this.#runApi(EditorApi.pipe(Effect.flatMap((api) => api.revokeSession(sessionJwt))));
+    } catch {
+      // The local credential is removed even when server-side revocation is unavailable.
+    }
+  }
+
+  applyPreset(presetId: string) {
+    if (!this.#selection) return;
+    const entity = this.#history.graph.entity(this.#selection);
+    const preset = this.#presets.find((candidate) => candidate.id === presetId);
+    if (!entity || !preset || preset.geometry !== geometryTypeForEntity(entity)) return;
+
+    const tags = { ...preset.defaultTags, ...entity.tags };
+    if (
+      this.#history.perform(
+        updateEntityProperties(this.#selection, { featureType: preset.featureType, tags }),
+        `Set preset ${preset.label}`,
+      )
+    ) {
+      this.#emit();
+    }
+  }
+
+  updateFeatureType(featureType: string) {
+    this.#updateSelection({ featureType }, "Change feature type");
+  }
+
+  updateSelectedY(y: number) {
+    if (!Number.isFinite(y)) return;
+    this.#updateSelection({ y }, "Change height");
+  }
+
+  updateTag(key: string, value: string) {
+    if (!this.#selection || key.trim() === "") return;
+    const entity = this.#history.graph.entity(this.#selection);
+    if (!entity) return;
+    this.#updateSelection({ tags: { ...entity.tags, [key.trim()]: value } }, `Change ${key} tag`);
+  }
+
+  removeTag(key: string) {
+    if (!this.#selection) return;
+    const entity = this.#history.graph.entity(this.#selection);
+    if (!entity || !(key in entity.tags)) return;
+    const tags = { ...entity.tags };
+    delete tags[key];
+    this.#updateSelection({ tags }, `Remove ${key} tag`);
+  }
+
+  finishDrawing() {
+    const drawing = this.#drawing;
+    if (!drawing) return;
+    const minimum = drawing.geometryKind === "area" ? 3 : 2;
+    if (drawing.vertices.length < minimum) return;
+
+    const preset = defaultPresetForGeometry(this.#presets, drawing.geometryKind);
+    if (!preset) return;
+
+    const createdNodes = drawing.vertices.flatMap((vertex) => {
+      if (vertex.nodeId !== null) return [];
+      const id = this.#nextLocalNodeId--;
+      return [
+        {
+          type: "node" as const,
+          id,
+          version: 0,
+          featureType: `${preset.featureType}:vertex`,
+          tags: {},
+          geom: vertex.point,
+          draftPoint: vertex.point,
+        },
+      ];
+    });
+    let createdNodeIndex = 0;
+    const nodeIds = drawing.vertices.map((vertex) => {
+      if (vertex.nodeId !== null) return vertex.nodeId;
+      return createdNodes[createdNodeIndex++]!.id;
+    });
+    if (drawing.geometryKind === "area") nodeIds.push(nodeIds[0]!);
+
+    const wayId = this.#nextLocalWayId--;
+    const way = {
+      type: "way" as const,
+      id: wayId,
+      version: 0,
+      featureType: preset.featureType,
+      tags: { ...preset.defaultTags },
+      geometryKind: drawing.geometryKind,
+      nodeIds,
+    };
+    const nodes = createdNodes.map(({ draftPoint: _draftPoint, ...node }) => node);
+
+    if (this.#history.perform(addEntities([...nodes, way]), `Add ${preset.label}`)) {
+      this.#selection = { type: "way", id: wayId };
+      this.#mode = "browse";
+      this.#drawing = null;
+      this.#emit();
+    }
+  }
+
+  cancelDrawing() {
+    if (!this.#drawing) return;
+    this.#mode = "browse";
+    this.#drawing = null;
+    this.#emit();
+  }
+
+  async save(comment: string | null) {
+    if (!this.#history.isDirty() || this.#saveState.status === "saving") return;
+    if (!this.#authSession || this.#authState.status !== "authenticated") {
+      this.#saveState = {
+        status: "error",
+        message: "Sign in before publishing changes.",
+        conflict: false,
+      };
+      this.#emit();
+      return;
+    }
+    const issues = validateGraph(this.#history.graph);
+    if (issues.some((issue) => issue.severity === "error")) {
+      this.#saveState = {
+        status: "error",
+        message: "Resolve validation errors before saving.",
+        conflict: false,
+      };
+      this.#emit();
+      return;
+    }
+
+    this.#saveState = { status: "saving" };
+    this.#emit();
+    try {
+      await this.#refreshAuthentication();
+      const saved = await this.#runApi(
+        EditorApi.pipe(
+          Effect.flatMap((api) => saveGraph(api, this.#history.base, this.#history.graph, comment)),
+        ),
+      );
+      if (this.#selection) {
+        const remap = saved.remaps.get(entityKey(this.#selection));
+        if (remap) this.#selection = { ...this.#selection, id: remap.id };
+      }
+      this.#history.reset(saved.graph);
+      this.#saveState = { status: "saved", message: "Changes published." };
+      this.#emit();
+      await this.#loadViewport();
+    } catch (error) {
+      const apiError = error as EditorApiError;
+      if (apiError?.unauthorized === true) {
+        this.#clearAuthSession();
+        this.#authState = {
+          status: "error",
+          message: "Your session expired. Sign in again to publish these changes.",
+        };
+      }
+      this.#saveState = {
+        status: "error",
+        message: errorMessage(error),
+        conflict: apiError?.conflict === true,
+      };
+      this.#emit();
+    }
+  }
+
+  reload() {
+    void this.#loadViewport();
+  }
+
+  dispose() {
+    this.#disposed = true;
+    this.#requestId += 1;
+    this.#resizeObserver.disconnect();
+    this.#overlay.on(".zoom", null).on(".editor", null);
+    this.#renderer.destroy();
+    this.#overlay.remove();
+    this.#tiles.destroy();
+    this.#listeners.clear();
+    void this.#apiRuntime.dispose();
+  }
+
+  #updateSelection(properties: Parameters<typeof updateEntityProperties>[1], annotation: string) {
+    if (!this.#selection) return;
+    if (this.#history.perform(updateEntityProperties(this.#selection, properties), annotation)) {
+      this.#emit();
+    }
+  }
+
+  #handleCanvasClick(event: MouseEvent) {
+    const point = this.#pointFromEvent(event);
+    if (this.#mode === "add-point") {
+      this.#createPoint(point);
+      return;
+    }
+    if (this.#mode === "draw-line" || this.#mode === "draw-area") {
+      this.#appendDraftVertex({ nodeId: null, point: this.#snapForMode(point) });
+      return;
+    }
+    this.select(null);
+  }
+
+  #handleEntityPointerDown(event: PointerEvent, ref: EntityRef) {
+    event.preventDefault();
+    event.stopPropagation();
+    const entity = this.#history.graph.entity(ref);
+    if (!entity) return;
+
+    if ((this.#mode === "draw-line" || this.#mode === "draw-area") && entity.type === "node") {
+      this.#appendDraftVertex({ nodeId: entity.id, point: entity.geom });
+      return;
+    }
+
+    if (this.#mode === "add-point") {
+      this.#mode = "browse";
+      this.select(ref);
+      return;
+    }
+
+    if (this.#mode !== "browse") return;
+    this.select(ref);
+    if (entity.type !== "node") return;
+
+    const captureTarget = event.currentTarget as Element;
+    this.#activeDrag = {
+      captureTarget,
+      nodeId: entity.id,
+      pointerId: event.pointerId,
+      start: entity.geom,
+      current: entity.geom,
+    };
+    captureTarget.setPointerCapture(event.pointerId);
+  }
+
+  #handleMidpointPointerDown(
+    event: PointerEvent,
+    wayId: number,
+    insertionIndex: number,
+    point: Point3D,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.#mode !== "browse") return;
+    const way = this.#history.graph.way(wayId);
+    if (!way) return;
+    const preset = presetForFeature(this.#presets, way.geometryKind, way.featureType);
+    const snapped = snapPoint(
+      point,
+      preset?.snapPolicy ?? (way.geometryKind === "area" ? "integer" : "half"),
+    );
+    const nodeId = this.#nextLocalNodeId--;
+    const node = {
+      type: "node" as const,
+      id: nodeId,
+      version: 0,
+      featureType: `${way.featureType}:vertex`,
+      tags: {},
+      geom: snapped,
+    };
+    if (this.#history.perform(insertNodeIntoWay(wayId, insertionIndex, node), "Insert vertex")) {
+      this.#selection = { type: "node", id: nodeId };
+      this.#emit();
+    }
+  }
+
+  #handlePointerMove(event: PointerEvent) {
+    if (this.#activeDrag?.pointerId === event.pointerId) {
+      const graph = this.#history.graph;
+      const node = graph.node(this.#activeDrag.nodeId);
+      if (!node) return;
+      const point = this.#pointFromEvent(event, node.geom.y);
+      const policy = this.#snapPolicyForNode(node.id);
+      const snapped = snapPoint(point, policy);
+      this.#activeDrag.current = snapped;
+      this.#transientNode = { id: node.id, geom: snapped };
+      this.#render();
+      return;
+    }
+
+    if (this.#drawing) {
+      this.#drawing = { ...this.#drawing, pointer: this.#snapForMode(this.#pointFromEvent(event)) };
+      this.#render();
+    }
+  }
+
+  #handlePointerUp(event: PointerEvent) {
+    const drag = this.#activeDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    this.#activeDrag = null;
+    this.#transientNode = null;
+    if (drag.captureTarget.hasPointerCapture(event.pointerId)) {
+      drag.captureTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (
+      drag.start.x !== drag.current.x ||
+      drag.start.y !== drag.current.y ||
+      drag.start.z !== drag.current.z
+    ) {
+      this.#history.perform(moveNode(drag.nodeId, drag.current), "Move vertex");
+    }
+    this.#emit();
+  }
+
+  #handleKeyDown(event: KeyboardEvent) {
+    const modifier = event.metaKey || event.ctrlKey;
+    if (modifier && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        this.redo();
+      } else {
+        this.undo();
+      }
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === "y") {
+      event.preventDefault();
+      this.redo();
+      return;
+    }
+    if (event.key === "Escape") {
+      this.cancelDrawing();
+      this.setMode("browse");
+      return;
+    }
+    if (event.key === "Enter") {
+      this.finishDrawing();
+      return;
+    }
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      this.deleteSelection();
+      return;
+    }
+    if (event.key === "1") this.setMode("add-point");
+    if (event.key === "2") this.setMode("draw-line");
+    if (event.key === "3") this.setMode("draw-area");
+  }
+
+  #appendDraftVertex(vertex: DrawingState["vertices"][number]) {
+    if (!this.#drawing) return;
+    const previous = this.#drawing.vertices.at(-1);
+    if (
+      previous &&
+      ((previous.nodeId !== null && previous.nodeId === vertex.nodeId) ||
+        (previous.nodeId === null &&
+          vertex.nodeId === null &&
+          previous.point.x === vertex.point.x &&
+          previous.point.z === vertex.point.z))
+    ) {
+      return;
+    }
+
+    if (
+      this.#drawing.geometryKind === "area" &&
+      this.#drawing.vertices.length >= 3 &&
+      vertex.nodeId !== null &&
+      vertex.nodeId === this.#drawing.vertices[0]?.nodeId
+    ) {
+      this.finishDrawing();
+      return;
+    }
+
+    this.#drawing = {
+      ...this.#drawing,
+      vertices: [...this.#drawing.vertices, vertex],
+      pointer: vertex.point,
+    };
+    this.#emit();
+  }
+
+  #createPoint(point: Point3D) {
+    const preset = defaultPresetForGeometry(this.#presets, "point");
+    if (!preset) return;
+    const id = this.#nextLocalNodeId--;
+    const node = {
+      type: "node" as const,
+      id,
+      version: 0,
+      featureType: preset.featureType,
+      tags: { ...preset.defaultTags },
+      geom: snapPoint(point, preset.snapPolicy),
+    };
+    if (this.#history.perform(addEntities([node]), `Add ${preset.label}`)) {
+      this.#selection = { type: "node", id };
+      this.#mode = "browse";
+      this.#emit();
+    }
+  }
+
+  #snapForMode(point: Point3D) {
+    const geometry = modeGeometry(this.#mode);
+    if (!geometry) return point;
+    const preset = defaultPresetForGeometry(this.#presets, geometry);
+    return snapPoint(point, preset?.snapPolicy ?? "free");
+  }
+
+  #snapPolicyForNode(nodeId: number): SnapPolicy {
+    const parentArea = this.#history.graph
+      .parentWays(nodeId)
+      .find((way) => way.geometryKind === "area");
+    if (parentArea) {
+      return (
+        presetForFeature(this.#presets, "area", parentArea.featureType)?.snapPolicy ?? "integer"
       );
     }
+    const node = this.#history.graph.node(nodeId);
+    if (!node) return "half";
+    return presetForFeature(this.#presets, "point", node.featureType)?.snapPolicy ?? "half";
   }
 
-  const wayNodesByWayId = new Map<number, WayNodeSnapshot[]>();
-
-  for (const wayNode of snapshot.wayNodes) {
-    const current = wayNodesByWayId.get(wayNode.wayId) ?? [];
-    current.push(wayNode);
-    wayNodesByWayId.set(wayNode.wayId, current);
+  #pointFromEvent(event: MouseEvent | PointerEvent, y = 0) {
+    const point = d3.pointer(event, this.#overlay.node());
+    return screenToWorld(this.#transform, [point[0], point[1]], y);
   }
 
-  const renderedWays: RenderedWay[] = [];
+  #repairSelection() {
+    if (this.#selection && !this.#history.graph.has(this.#selection)) this.#selection = null;
+  }
 
-  for (const way of visibleWays) {
-    if (draft?.type === "way" && way.id === draft.id) {
-      renderedWays.push({
-        ...way,
-        featureType: draft.featureType,
-        geometryKind: draft.geometryKind,
-        isClosed: draft.isClosed,
-        tags: rowsToTags(draft.tags),
-        nodeIds: draft.vertices.flatMap((vertex) =>
-          vertex.nodeId === null ? [] : [vertex.nodeId],
-        ),
-        coordinates: coordinatesFromWayDraft(draft, nodesById),
-      });
-      continue;
+  async #loadViewport() {
+    if (this.#disposed) return;
+    const requestId = ++this.#requestId;
+    this.#loading = true;
+    this.#loadError = null;
+    this.#emit();
+    const bbox = getViewportBbox(this.#transform, getElementSize(this.#root));
+
+    try {
+      const viewport = await this.#runApi(
+        EditorApi.pipe(Effect.flatMap((api) => loadViewportEntities(api, bbox))),
+      );
+      if (this.#disposed || requestId !== this.#requestId) return;
+      this.#history.rebase(viewport.entities);
+      this.#loading = false;
+      this.#repairSelection();
+      this.#emit();
+    } catch (error) {
+      if (this.#disposed || requestId !== this.#requestId) return;
+      this.#loading = false;
+      this.#loadError = errorMessage(error);
+      this.#emit();
     }
+  }
 
-    const orderedWayNodes = [...(wayNodesByWayId.get(way.id) ?? [])].sort((left, right) => {
-      return left.seq - right.seq;
-    });
-    const nodes = orderedWayNodes
-      .map((wayNode) => nodesById.get(wayNode.nodeId))
-      .filter((node): node is NodeSnapshot => node !== undefined);
-    const coordinates = nodes.map(toCoordinate);
+  #createSnapshot(): EditorSnapshot {
+    const selectedEntity = this.#selection
+      ? (this.#history.graph.entity(this.#selection) ?? null)
+      : null;
+    return {
+      mode: this.#mode,
+      selection: this.#selection,
+      selectedEntity,
+      canUndo: this.#history.canUndo,
+      canRedo: this.#history.canRedo,
+      dirty: this.#history.isDirty(),
+      loading: this.#loading,
+      loadError: this.#loadError,
+      drawing: this.#drawing,
+      issues: validateGraph(this.#history.graph),
+      save: this.#saveState,
+      auth: this.#authState,
+    };
+  }
 
-    if (coordinates.length < 2) {
-      continue;
+  async #verifyStoredSession() {
+    try {
+      await this.#refreshAuthentication();
+      if (!this.#disposed) this.#emit();
+    } catch (error) {
+      if (this.#disposed) return;
+      const apiError = error as EditorApiError;
+      if (apiError?.unauthorized === true) this.#clearAuthSession();
+      this.#authState = { status: "error", message: errorMessage(error) };
+      this.#emit();
     }
+  }
 
-    renderedWays.push({
-      ...way,
-      nodeIds: nodes.map((node) => node.id),
-      coordinates,
+  async #refreshAuthentication() {
+    const current = this.#authSession;
+    if (!current) throw new EditorApiError("Authentication required", false, true, null);
+    const verified = await this.#runApi(
+      EditorApi.pipe(Effect.flatMap((api) => api.verifySession(current.sessionJwt))),
+    );
+    this.#setAuthSession(storedSessionFromVerified(current, verified));
+  }
+
+  #setAuthSession(session: StoredAuthSession) {
+    this.#authSession = session;
+    writeStoredAuthSession(session);
+    this.#authState = {
+      status: "authenticated",
+      userId: session.userId,
+      expiresAt: session.expiresAt,
+    };
+  }
+
+  #clearAuthSession() {
+    this.#authSession = null;
+    clearStoredAuthSession();
+    this.#authState = { status: "anonymous" };
+  }
+
+  async #runApi<A>(effect: Effect.Effect<A, EditorApiError, EditorApi>) {
+    const exit = await this.#apiRuntime.runPromiseExit(effect);
+    if (Exit.isSuccess(exit)) return exit.value;
+
+    const failure = Cause.failureOption(exit.cause);
+    if (Option.isSome(failure)) throw failure.value;
+    throw new Error(Cause.pretty(exit.cause));
+  }
+
+  #render() {
+    this.#renderer.render({
+      graph: this.#history.graph,
+      selection: this.#selection,
+      drawing: this.#drawing,
+      transientNode: this.#transientNode,
+      transform: this.#transform,
     });
   }
 
-  return {
-    nodesById,
-    waysById: new Map(
-      visibleWays.map((way) => [
-        way.id,
-        draft?.type === "way" && draft.id === way.id
-          ? {
-              ...way,
-              featureType: draft.featureType,
-              geometryKind: draft.geometryKind,
-              isClosed: draft.isClosed,
-              tags: rowsToTags(draft.tags),
-            }
-          : way,
-      ]),
-    ),
-    renderedNodes: [...nodesById.values()].map((node) => ({
-      ...node,
-      coordinate: toCoordinate(node),
-    })),
-    renderedWays,
-  };
-};
-
-const parseErrorMessage = async (response: Response) => {
-  const fallback = `${response.status} ${response.statusText}`;
-
-  try {
-    const json = (await response.json()) as { message?: string; error?: string };
-    return json.message ?? json.error ?? fallback;
-  } catch {
-    return fallback;
+  #emit() {
+    if (this.#history.isDirty() && this.#saveState.status === "saved") {
+      this.#saveState = { status: "idle" };
+    }
+    this.#snapshot = this.#createSnapshot();
+    this.#render();
+    for (const listener of this.#listeners) listener();
   }
-};
-
-export async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    credentials: "include",
-    headers: {
-      "content-type": "application/json",
-      ...init?.headers,
-    },
-    ...init,
-  });
-
-  if (!response.ok) {
-    const error = new Error(await parseErrorMessage(response)) as ApiError;
-    error.status = response.status;
-    throw error;
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
 }
 
-export const formatBbox = (bounds: LatLngBounds) => {
-  const minX = bounds.getWest();
-  const minZ = bounds.getSouth();
-  const maxX = bounds.getEast();
-  const maxZ = bounds.getNorth();
-
-  return [minX, minZ, maxX, maxZ] as const;
-};
-
-export const toFixedCoordinate = (value: number) => {
-  if (!Number.isFinite(value)) {
-    return "";
-  }
-
-  return value.toFixed(2);
-};
+export type { Operation, OperationId } from "./editor/operations";
+export type {
+  EditorAuthState,
+  EditorMode,
+  EditorSnapshot,
+  EntityRef,
+  PresetDefinition,
+} from "./editor/types";

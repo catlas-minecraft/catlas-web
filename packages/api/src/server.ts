@@ -7,6 +7,7 @@ import { DevTools } from "@effect/experimental";
 import { ApiLive } from "./Api.js";
 import { JwtServiceLive } from "./auth/AuthSessionManager.js";
 import { SessionRepositoryLive } from "./auth/KyselySessionRepository.js";
+import { OtelLive } from "./observability/Otel.js";
 import { middlewareOpenApi } from "@effect/platform/HttpApiBuilder";
 
 const DevToolsLive = DevTools.layer();
@@ -32,6 +33,7 @@ export const makeHttpLive = (config: {
     Layer.provide(ApiLive),
     Layer.provide(SessionRepositoryLive),
     Layer.provide(JwtServiceLive),
+    Layer.provide(OtelLive),
     Layer.provide(makeDatabaseLayerFromConfig()),
     Layer.provide(DevToolsLive),
     Layer.provide(

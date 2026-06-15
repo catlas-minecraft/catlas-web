@@ -1,14 +1,14 @@
 {
   "name": "@catlas/louis",
   "version": "0.0.0",
-  "type": "module",
-  "license": "MIT",
   "description": "The server template",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "<PLACEHOLDER>",
     "directory": "packages/louis"
   },
+  "type": "module",
   "publishConfig": {
     "access": "public",
     "directory": "dist"
@@ -20,8 +20,8 @@
     "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "check": "tsc -b tsconfig.json",
-    "test": "vitest",
-    "coverage": "vitest --coverage"
+    "test": "vp test",
+    "coverage": "vp test --coverage"
   },
   "dependencies": {
     "@catlas/domain": "workspace:^",
@@ -30,6 +30,11 @@
     "@oslojs/crypto": "^1.0.1",
     "effect": "3.21.0",
     "jose": "^6.2.2"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^0.29.0",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "effect": {
     "generateExports": {
@@ -42,9 +47,5 @@
         "**/*.ts"
       ]
     }
-  },
-  "devDependencies": {
-    "@effect/vitest": "^0.29.0",
-    "vitest": "^3.2.4"
   }
 }

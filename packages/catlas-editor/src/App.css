@@ -1,0 +1,368 @@
+.editor-shell {
+  background: var(--muted);
+  color: var(--foreground);
+  display: grid;
+  grid-template-rows: 58px minmax(0, 1fr) 68px;
+  height: 100dvh;
+  overflow: hidden;
+  width: 100vw;
+}
+
+.editor-loading {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+}
+
+.loading-mark,
+.toolbar__mark {
+  align-items: center;
+  background: var(--primary);
+  border-radius: var(--radius);
+  color: var(--primary-foreground);
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+}
+
+.loading-mark {
+  height: 48px;
+  width: 48px;
+}
+
+.toolbar {
+  align-items: center;
+  background: color-mix(in oklab, var(--background) 96%, transparent);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  padding: 8px 14px;
+  position: relative;
+  z-index: 20;
+}
+
+.toolbar--loading {
+  min-height: 58px;
+}
+
+.toolbar__brand {
+  align-items: center;
+  display: flex;
+  font-size: 14px;
+  font-weight: 750;
+  gap: 9px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.toolbar__mark {
+  border-radius: calc(var(--radius) - 2px);
+  height: 32px;
+  width: 32px;
+}
+
+.toolbar__spacer {
+  flex: 1;
+}
+
+.toolbar__status {
+  white-space: nowrap;
+}
+
+.status-dot {
+  background: #3f8659;
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.map-frame {
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.map-pane {
+  background: #d7ddd4;
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
+}
+
+.map-pane canvas,
+.map-pane svg {
+  display: block;
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.map-pane canvas {
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.map-pane svg {
+  cursor: grab;
+  touch-action: none;
+}
+
+.map-pane svg:active {
+  cursor: grabbing;
+}
+
+.entity-area {
+  fill: rgba(63, 134, 89, 0.24);
+  stroke: #2f7048;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.entity-area.is-selected {
+  fill: rgba(237, 174, 48, 0.25);
+  stroke: #d68e13;
+  stroke-width: 3;
+}
+
+.entity-line {
+  fill: none;
+  stroke: #2f7048;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.entity-line.is-selected {
+  stroke: #e19a1f;
+  stroke-width: 6;
+}
+
+.entity-hit {
+  stroke: transparent;
+  stroke-width: 18;
+  vector-effect: non-scaling-stroke;
+}
+
+.entity-hit--line {
+  fill: none;
+  pointer-events: stroke;
+}
+
+.entity-hit--area {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.entity-node {
+  fill: #fff;
+  pointer-events: all;
+  stroke: #265d3b;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.entity-node.is-point {
+  fill: #4b9c68;
+}
+
+.entity-node.is-selected {
+  fill: #f7bd4f;
+  stroke: #8b5b08;
+  stroke-width: 3;
+}
+
+.entity-midpoint {
+  fill: #fff;
+  pointer-events: all;
+  stroke: #d68e13;
+  stroke-width: 2;
+}
+
+.entity-midpoint:hover {
+  fill: #f7bd4f;
+  transform: scale(1.35);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.draft-way {
+  fill: rgba(80, 125, 191, 0.13);
+  pointer-events: none;
+  stroke: #3976b8;
+  stroke-dasharray: 7 5;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.draft-node {
+  fill: #fff;
+  pointer-events: none;
+  stroke: #3976b8;
+  stroke-width: 2;
+}
+
+.inspector {
+  background: var(--background);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+  overflow-y: auto;
+  position: relative;
+  z-index: 10;
+}
+
+.inspector__header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.inspector__header h2 {
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+  margin: 3px 0 0;
+}
+
+.eyebrow {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.inspector__body {
+  padding: 0 20px 24px;
+}
+
+.form-section {
+  padding: 18px 0;
+}
+
+.form-section h3 {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  margin: 0 0 14px;
+  text-transform: uppercase;
+}
+
+.tag-list {
+  display: grid;
+  gap: 7px;
+}
+
+.tag-row {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 85px 1fr 28px;
+}
+
+.tag-row code {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-add {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 0.8fr 1fr auto;
+  margin-top: 10px;
+}
+
+.draft-controls,
+.notice {
+  background: color-mix(in oklab, var(--background) 96%, transparent);
+  box-shadow: 0 10px 30px rgba(31, 48, 37, 0.16);
+  position: absolute;
+  z-index: 15;
+}
+
+.draft-controls {
+  left: 50%;
+  max-width: min(480px, calc(100% - 28px));
+  top: 14px;
+  transform: translateX(-50%);
+  width: max-content;
+}
+
+.notice {
+  bottom: 16px;
+  left: 16px;
+  max-width: min(420px, calc(100% - 32px));
+}
+
+.coordinate-hint {
+  background: rgba(28, 40, 32, 0.72);
+  border-radius: 5px;
+  bottom: 12px;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding: 5px 7px;
+  position: absolute;
+  right: 12px;
+  z-index: 8;
+}
+
+.save-panel {
+  align-items: center;
+  background: var(--background);
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 210px minmax(180px, 1fr) auto;
+  padding: 10px 14px;
+  position: relative;
+  z-index: 20;
+}
+
+.save-panel__summary {
+  display: grid;
+}
+
+.save-panel__summary strong {
+  font-size: 12px;
+}
+
+.save-panel__summary span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 270px minmax(0, 1fr);
+  }
+
+  .toolbar__brand > span:last-child,
+  .toolbar__status {
+    display: none;
+  }
+
+  .save-panel {
+    grid-template-columns: 1fr auto;
+  }
+
+  .save-panel__summary {
+    display: none;
+  }
+}

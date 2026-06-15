@@ -7,20 +7,32 @@ Run the server package in development to start the API on `http://localhost:3000
 Start PostGIS:
 
 ```sh
-pnpm db:up
+vp run -w db:up
 ```
 
 Apply migrations:
 
 ```sh
-pnpm db:migrate
+vp run -w db:migrate
+```
+
+Prepare local env:
+
+```sh
+cp packages/api/.env.example packages/api/.env
 ```
 
 Start the API:
 
 ```sh
-pnpm api:dev
+vp run --filter @catlas/api dev
 ```
+
+Set `OTEL_ENABLED=true` in `packages/api/.env` to export existing Effect spans with OTLP.
+You can point traces at a collector with `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, or use the shared
+base URL `OTEL_EXPORTER_OTLP_ENDPOINT` and the API will derive `/v1/traces`.
+Custom headers are supported via `OTEL_EXPORTER_OTLP_TRACES_HEADERS` or `OTEL_EXPORTER_OTLP_HEADERS`
+using `key=value,key2=value2` format.
 
 ## Auth API
 

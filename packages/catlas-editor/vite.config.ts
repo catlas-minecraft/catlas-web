@@ -1,30 +1,42 @@
-import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type ProxyOptions } from "vite-plus";
-
-const createApiProxy = (): ProxyOptions => ({
-  target: "http://127.0.0.1:1355",
-  changeOrigin: false,
-  headers: {
-    host: "api.catlas.localhost:1355",
-  },
-});
+import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
   resolve: {
-    tsconfigPaths: true,
+    alias: [
+      {
+        find: /^@\/(.*)$/,
+        replacement: fileURLToPath(new URL("./src/$1", import.meta.url)),
+      },
+      {
+        find: /^@catlas\/domain$/,
+        replacement: fileURLToPath(new URL("../domain/src/index.ts", import.meta.url)),
+      },
+      {
+        find: /^@catlas\/domain\/(.*)$/,
+        replacement: fileURLToPath(new URL("../domain/src/$1", import.meta.url)),
+      },
+      {
+        find: /^@catlas\/schema$/,
+        replacement: fileURLToPath(new URL("../schema/src/index.ts", import.meta.url)),
+      },
+      {
+        find: /^@catlas\/schema\/(.*)$/,
+        replacement: fileURLToPath(new URL("../schema/src/$1", import.meta.url)),
+      },
+    ],
   },
   server: {
-    host: process.env.HOST,
-    port: Number(process.env.PORT),
     proxy: {
-      "/auth": createApiProxy(),
-      "/changesets": createApiProxy(),
-      "/nodes": createApiProxy(),
-      "/relations": createApiProxy(),
-      "/viewport": createApiProxy(),
-      "/ways": createApiProxy(),
+      "/auth": "http://api.catlas.localhost:1355",
+      "/changesets": "http://api.catlas.localhost:1355",
+      "/nodes": "http://api.catlas.localhost:1355",
+      "/relations": "http://api.catlas.localhost:1355",
+      "/viewport": "http://api.catlas.localhost:1355",
+      "/ways": "http://api.catlas.localhost:1355",
     },
   },
+  plugins: [react(), tailwindcss()],
 });

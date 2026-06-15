@@ -1,6 +1,12 @@
-import { HttpApi } from "@effect/platform"
-import { AuthApiGroup } from "./AuthApi.js"
-import { ChangesetsApiGroup, NodesApiGroup, RelationsApiGroup, ViewportApiGroup, WaysApiGroup } from "./GeospatialApi.js"
+import { HttpApi } from "@effect/platform";
+import { AuthApiGroup } from "./AuthApi.js";
+import {
+  ChangesetsApiGroup,
+  NodesApiGroup,
+  RelationsApiGroup,
+  ViewportApiGroup,
+  WaysApiGroup,
+} from "./GeospatialApi.js";
 
 export class Api extends HttpApi.make("api")
   .add(AuthApiGroup)
@@ -8,5 +14,4 @@ export class Api extends HttpApi.make("api")
   .add(ChangesetsApiGroup)
   .add(NodesApiGroup)
   .add(WaysApiGroup)
-  .add(RelationsApiGroup)
-{}
+  .add(RelationsApiGroup) {}
