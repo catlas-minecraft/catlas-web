@@ -103,6 +103,8 @@ export class CatlasEditor {
   #activeDrag: ActiveDrag | null = null;
   #authSession: StoredAuthSession | null = null;
   #authState: EditorAuthState = { status: "anonymous" };
+  #cursor: Point3D | null = null;
+  #cursorFrame: number | null = null;
   #disposed = false;
   #drawing: DrawingState | null = null;
   #loadError: string | null = null;
@@ -149,11 +151,9 @@ export class CatlasEditor {
       .scaleExtent(getZoomScaleExtent())
       .extent(getViewportExtent(size))
       .filter((event) => {
+        if (event.type === "wheel") return true;
         const target = event.target as Element | null;
-        return (
-          !target?.closest?.("[data-interactive='true']") &&
-          (event.type === "wheel" || event.button === 0)
-        );
+        return !target?.closest?.("[data-interactive='true']") && event.button === 0;
       })
       .on("zoom", (event) => {
         this.#transform = event.transform;
@@ -171,6 +171,7 @@ export class CatlasEditor {
       if (this.#mode === "draw-line") this.finishDrawing();
     });
     this.#overlay.on("pointermove.editor", (event: PointerEvent) => this.#handlePointerMove(event));
+    this.#overlay.on("pointerleave.editor", () => this.#setCursor(null));
     this.#overlay.on("pointerup.editor pointercancel.editor", (event: PointerEvent) =>
       this.#handlePointerUp(event),
     );
@@ -450,6 +451,7 @@ export class CatlasEditor {
   dispose() {
     this.#disposed = true;
     this.#requestId += 1;
+    if (this.#cursorFrame !== null) cancelAnimationFrame(this.#cursorFrame);
     this.#resizeObserver.disconnect();
     this.#overlay.on(".zoom", null).on(".editor", null);
     this.#renderer.destroy();
@@ -543,11 +545,14 @@ export class CatlasEditor {
   }
 
   #handlePointerMove(event: PointerEvent) {
+    const cursor = this.#pointFromEvent(event);
+    this.#setCursor(cursor);
+
     if (this.#activeDrag?.pointerId === event.pointerId) {
       const graph = this.#history.graph;
       const node = graph.node(this.#activeDrag.nodeId);
       if (!node) return;
-      const point = this.#pointFromEvent(event, node.geom.y);
+      const point = { ...cursor, y: node.geom.y };
       const policy = this.#snapPolicyForNode(node.id);
       const snapped = snapPoint(point, policy);
       this.#activeDrag.current = snapped;
@@ -557,9 +562,20 @@ export class CatlasEditor {
     }
 
     if (this.#drawing) {
-      this.#drawing = { ...this.#drawing, pointer: this.#snapForMode(this.#pointFromEvent(event)) };
+      this.#drawing = { ...this.#drawing, pointer: this.#snapForMode(cursor) };
       this.#render();
     }
+  }
+
+  #setCursor(cursor: Point3D | null) {
+    this.#cursor = cursor;
+    if (this.#cursorFrame !== null) return;
+    this.#cursorFrame = requestAnimationFrame(() => {
+      this.#cursorFrame = null;
+      if (this.#disposed) return;
+      this.#snapshot = this.#createSnapshot();
+      for (const listener of this.#listeners) listener();
+    });
   }
 
   #handlePointerUp(event: PointerEvent) {
@@ -728,6 +744,7 @@ export class CatlasEditor {
       : null;
     return {
       mode: this.#mode,
+      cursor: this.#cursor,
       selection: this.#selection,
       selectedEntity,
       canUndo: this.#history.canUndo,

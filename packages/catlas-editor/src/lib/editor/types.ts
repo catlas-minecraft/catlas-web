@@ -70,6 +70,7 @@ export type EditorAuthState =
 
 export type EditorSnapshot = {
   readonly mode: EditorMode;
+  readonly cursor: Point3D | null;
   readonly selection: EntityRef | null;
   readonly selectedEntity: EditorEntity | null;
   readonly canUndo: boolean;

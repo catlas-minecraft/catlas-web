@@ -27,10 +27,17 @@ function MapOverlayContent({ editor }: { readonly editor: CatlasEditor }) {
     <>
       <DraftControls editor={editor} snapshot={snapshot} />
       <StatusOverlay editor={editor} snapshot={snapshot} />
-      <div className="coordinate-hint">XZ canvas / Y in inspector</div>
+      <div className="coordinate-hint">
+        {snapshot.cursor
+          ? `X ${formatCoordinate(snapshot.cursor.x)}  Z ${formatCoordinate(snapshot.cursor.z)}`
+          : "X --  Z --"}
+      </div>
     </>
   );
 }
+
+const formatCoordinate = (value: number) =>
+  Number.isInteger(value) ? String(value) : value.toFixed(2);
 
 function DraftControls({ editor, snapshot }: { editor: CatlasEditor; snapshot: EditorSnapshot }) {
   if (!snapshot.drawing) return null;
