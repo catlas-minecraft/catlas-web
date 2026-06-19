@@ -98,14 +98,10 @@ export const EditorApiLive = (baseUrl: string, getSessionJwt: () => string | nul
               const created = yield* client.changesets.createChangesetOsm({
                 payload: { comment },
               });
-              const diff = yield* client.changesets.uploadChangeset({
+              return yield* client.changesets.uploadChangeset({
                 path: { id: created.changesetId },
                 payload,
               });
-              yield* client.changesets.closeChangeset({
-                path: { id: created.changesetId },
-              });
-              return diff;
             }).pipe(Effect.mapError(toEditorApiError)),
         }),
       ),

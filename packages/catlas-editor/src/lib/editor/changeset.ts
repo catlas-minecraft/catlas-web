@@ -8,6 +8,36 @@ export type GraphDifference = {
   readonly deleted: readonly EditorEntity[];
 };
 
+export type ChangesetReviewValue = string | number | null | readonly number[];
+
+export type ChangesetReviewField = {
+  readonly key: string;
+  readonly label: string;
+  readonly before: ChangesetReviewValue;
+  readonly after: ChangesetReviewValue;
+};
+
+export type ChangesetReviewEntry = {
+  readonly key: string;
+  readonly kind: "create" | "modify" | "delete";
+  readonly ref: { readonly type: "node" | "way"; readonly id: number };
+  readonly featureType: string;
+  readonly geometry: "point" | "line" | "area";
+  readonly expectedVersion: number | null;
+  readonly fields: readonly ChangesetReviewField[];
+};
+
+export type ChangesetReview = {
+  readonly entries: readonly ChangesetReviewEntry[];
+  readonly counts: {
+    readonly created: number;
+    readonly modified: number;
+    readonly deleted: number;
+    readonly total: number;
+  };
+  readonly payload: ChangesetUploadPayload;
+};
+
 export const difference = (base: Graph, current: Graph): GraphDifference => {
   const created = current.entities().filter((entity) => !base.has(entity));
   const modified = current.entities().filter((entity) => {
@@ -74,6 +104,98 @@ export const toChangesetUpload = (base: Graph, current: Graph): ChangesetUploadP
       ways: deletedWays.map((way) => ({ id: way.id, expectedVersion: way.version })),
       relations: [],
     },
+  };
+};
+
+const valuesEqual = (left: ChangesetReviewValue, right: ChangesetReviewValue) => {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+  }
+  return left === right;
+};
+
+const fieldChanges = (
+  kind: ChangesetReviewEntry["kind"],
+  before: EditorEntity | null,
+  after: EditorEntity | null,
+) => {
+  const fields: ChangesetReviewField[] = [];
+  const include = (
+    key: string,
+    label: string,
+    beforeValue: ChangesetReviewValue,
+    afterValue: ChangesetReviewValue,
+  ) => {
+    if (kind === "modify" && valuesEqual(beforeValue, afterValue)) return;
+    fields.push({ key, label, before: beforeValue, after: afterValue });
+  };
+
+  include("featureType", "Feature type", before?.featureType ?? null, after?.featureType ?? null);
+
+  if (before?.type === "node" || after?.type === "node") {
+    const beforeNode = before?.type === "node" ? before : null;
+    const afterNode = after?.type === "node" ? after : null;
+    include("geom.x", "X", beforeNode?.geom.x ?? null, afterNode?.geom.x ?? null);
+    include("geom.y", "Y", beforeNode?.geom.y ?? null, afterNode?.geom.y ?? null);
+    include("geom.z", "Z", beforeNode?.geom.z ?? null, afterNode?.geom.z ?? null);
+  }
+
+  if (before?.type === "way" || after?.type === "way") {
+    const beforeWay = before?.type === "way" ? before : null;
+    const afterWay = after?.type === "way" ? after : null;
+    include(
+      "geometryKind",
+      "Geometry",
+      beforeWay?.geometryKind ?? null,
+      afterWay?.geometryKind ?? null,
+    );
+    include("nodeRefs", "Node refs", beforeWay?.nodeIds ?? null, afterWay?.nodeIds ?? null);
+  }
+
+  const tagKeys = new Set([...Object.keys(before?.tags ?? {}), ...Object.keys(after?.tags ?? {})]);
+  for (const key of [...tagKeys].toSorted()) {
+    include(`tags.${key}`, `Tag: ${key}`, before?.tags[key] ?? null, after?.tags[key] ?? null);
+  }
+
+  return fields;
+};
+
+const reviewEntry = (
+  kind: ChangesetReviewEntry["kind"],
+  before: EditorEntity | null,
+  after: EditorEntity | null,
+): ChangesetReviewEntry => {
+  const entity = after ?? before;
+  if (!entity) throw new Error("A changeset review entry requires an entity");
+
+  return {
+    key: entityKey(entity),
+    kind,
+    ref: { type: entity.type, id: entity.id },
+    featureType: entity.featureType,
+    geometry: entity.type === "node" ? "point" : entity.geometryKind,
+    expectedVersion: kind === "create" ? null : entity.version,
+    fields: fieldChanges(kind, before, after),
+  };
+};
+
+export const buildChangesetReview = (base: Graph, current: Graph): ChangesetReview => {
+  const diff = difference(base, current);
+  const created = diff.created.map((entity) => reviewEntry("create", null, entity));
+  const modified = diff.modified.map((entity) =>
+    reviewEntry("modify", base.entity(entity) ?? null, entity),
+  );
+  const deleted = diff.deleted.map((entity) => reviewEntry("delete", entity, null));
+
+  return {
+    entries: [...created, ...modified, ...deleted],
+    counts: {
+      created: created.length,
+      modified: modified.length,
+      deleted: deleted.length,
+      total: created.length + modified.length + deleted.length,
+    },
+    payload: toChangesetUpload(base, current),
   };
 };
 

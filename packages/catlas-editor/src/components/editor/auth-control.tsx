@@ -46,7 +46,7 @@ export function AuthControl({ editor, snapshot }: AuthControlProps) {
         <DropdownMenuTrigger asChild>
           <Button
             aria-label={`Account menu for ${auth.userId}`}
-            size="icon"
+            size="icon-sm"
             title={`Signed in as ${auth.userId}`}
             type="button"
             variant="outline"
@@ -88,7 +88,7 @@ export function AuthControl({ editor, snapshot }: AuthControlProps) {
         <Button
           aria-label={isBusy ? "Checking session" : "Open sign in menu"}
           disabled={isBusy}
-          size="icon"
+          size="icon-sm"
           title={isBusy ? "Checking session" : "Sign in"}
           type="button"
           variant="outline"

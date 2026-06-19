@@ -73,6 +73,7 @@ export type EditorSnapshot = {
   readonly cursor: Point3D | null;
   readonly selection: EntityRef | null;
   readonly selectedEntity: EditorEntity | null;
+  readonly changePreview: EntityRef | null;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly dirty: boolean;

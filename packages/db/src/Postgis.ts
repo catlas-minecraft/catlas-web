@@ -75,4 +75,10 @@ export const makeMultipolygonRelationGeometry = (relationId: number) =>
   )`;
 
 export const makeGeometryBBox = (geometry: ReturnType<typeof sql<GeometryValue>>) =>
-  sql<GeometryValue>`ST_Force2D(ST_Envelope(ST_Force2D(${geometry})))`;
+  sql<GeometryValue>`ST_MakeEnvelope(
+    ST_XMin(Box2D(ST_Force2D(${geometry}))),
+    ST_YMin(Box2D(ST_Force2D(${geometry}))),
+    ST_XMax(Box2D(ST_Force2D(${geometry}))),
+    ST_YMax(Box2D(ST_Force2D(${geometry}))),
+    0
+  )`;

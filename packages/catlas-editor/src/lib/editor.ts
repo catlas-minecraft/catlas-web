@@ -1,5 +1,6 @@
 import * as d3 from "d3";
 import { Cause, Effect, Exit, ManagedRuntime, Option } from "effect";
+import type { Graph } from "./graph";
 import { addEntities, insertNodeIntoWay, moveNode, updateEntityProperties } from "./editor/actions";
 import { EditorApi, EditorApiError, EditorApiLive } from "./editor/api-client";
 import {
@@ -10,6 +11,7 @@ import {
   type StoredAuthSession,
   writeStoredAuthSession,
 } from "./editor/auth";
+import { buildChangesetReview, type ChangesetReview } from "./editor/changeset";
 import { History } from "./editor/history";
 import { getOperation, type Operation, type OperationId } from "./editor/operations";
 import {
@@ -58,6 +60,11 @@ type ActiveDrag = {
   current: Point3D;
 };
 
+type ChangePreview = {
+  readonly graph: Graph;
+  readonly ref: EntityRef;
+};
+
 const modeGeometry = (mode: EditorMode) => {
   if (mode === "add-point") return "point";
   if (mode === "draw-line") return "line";
@@ -103,6 +110,12 @@ export class CatlasEditor {
   #activeDrag: ActiveDrag | null = null;
   #authSession: StoredAuthSession | null = null;
   #authState: EditorAuthState = { status: "anonymous" };
+  #changePreview: ChangePreview | null = null;
+  #changesetReviewCache: {
+    readonly base: Graph;
+    readonly current: Graph;
+    readonly review: ChangesetReview;
+  } | null = null;
   #cursor: Point3D | null = null;
   #cursorFrame: number | null = null;
   #disposed = false;
@@ -203,6 +216,32 @@ export class CatlasEditor {
     return this.#presets;
   }
 
+  getChangesetReview() {
+    const base = this.#history.base;
+    const current = this.#history.graph;
+    const cached = this.#changesetReviewCache;
+    if (cached?.base === base && cached.current === current) return cached.review;
+
+    const review = buildChangesetReview(base, current);
+    this.#changesetReviewCache = { base, current, review };
+    return review;
+  }
+
+  previewChange(ref: EntityRef | null) {
+    if (!ref) {
+      if (this.#clearChangePreview()) this.#emit();
+      return;
+    }
+
+    const entry = this.getChangesetReview().entries.find(
+      (candidate) => candidate.ref.type === ref.type && candidate.ref.id === ref.id,
+    );
+    if (!entry || entry.kind !== "delete" || !this.#history.base.has(ref)) return;
+
+    this.#changePreview = { graph: this.#history.base, ref };
+    this.#emit();
+  }
+
   operation(id: OperationId): Operation {
     const operation = getOperation(id, this.#history.graph, this.#selection);
     return {
@@ -212,6 +251,7 @@ export class CatlasEditor {
       disabledReason: operation.disabledReason,
       execute: () => {
         if (!operation.action) return;
+        this.#changePreview = null;
         if (this.#history.perform(operation.action, operation.annotation)) {
           this.#selection = null;
           this.#emit();
@@ -221,7 +261,11 @@ export class CatlasEditor {
   }
 
   setMode(mode: EditorMode) {
-    if (mode === this.#mode) return;
+    const previewCleared = this.#clearChangePreview();
+    if (mode === this.#mode) {
+      if (previewCleared) this.#emit();
+      return;
+    }
     this.#mode = mode;
     const geometry = modeGeometry(mode);
     this.#drawing =
@@ -233,20 +277,32 @@ export class CatlasEditor {
   }
 
   select(entity: EntityRef | null) {
+    const previewCleared = this.#clearChangePreview();
     const nextSelection = entity && this.#history.graph.has(entity) ? entity : null;
-    if (sameEntityRef(this.#selection, nextSelection)) return;
+    if (sameEntityRef(this.#selection, nextSelection)) {
+      if (previewCleared) this.#emit();
+      return;
+    }
     this.#selection = nextSelection;
     this.#emit();
   }
 
   undo() {
-    if (!this.#history.undo()) return;
+    const previewCleared = this.#clearChangePreview();
+    if (!this.#history.undo()) {
+      if (previewCleared) this.#emit();
+      return;
+    }
     this.#repairSelection();
     this.#emit();
   }
 
   redo() {
-    if (!this.#history.redo()) return;
+    const previewCleared = this.#clearChangePreview();
+    if (!this.#history.redo()) {
+      if (previewCleared) this.#emit();
+      return;
+    }
     this.#repairSelection();
     this.#emit();
   }
@@ -409,13 +465,15 @@ export class CatlasEditor {
       return;
     }
 
+    this.#changePreview = null;
     this.#saveState = { status: "saving" };
+    const review = this.getChangesetReview();
     this.#emit();
     try {
       await this.#refreshAuthentication();
       const saved = await this.#runApi(
         EditorApi.pipe(
-          Effect.flatMap((api) => saveGraph(api, this.#history.base, this.#history.graph, comment)),
+          Effect.flatMap((api) => saveGraph(api, this.#history.graph, review.payload, comment)),
         ),
       );
       if (this.#selection) {
@@ -459,6 +517,12 @@ export class CatlasEditor {
     this.#tiles.destroy();
     this.#listeners.clear();
     void this.#apiRuntime.dispose();
+  }
+
+  #clearChangePreview() {
+    if (!this.#changePreview) return false;
+    this.#changePreview = null;
+    return true;
   }
 
   #updateSelection(properties: Parameters<typeof updateEntityProperties>[1], annotation: string) {
@@ -727,6 +791,7 @@ export class CatlasEditor {
       );
       if (this.#disposed || requestId !== this.#requestId) return;
       this.#history.rebase(viewport.entities);
+      this.#changePreview = null;
       this.#loading = false;
       this.#repairSelection();
       this.#emit();
@@ -747,6 +812,7 @@ export class CatlasEditor {
       cursor: this.#cursor,
       selection: this.#selection,
       selectedEntity,
+      changePreview: this.#changePreview?.ref ?? null,
       canUndo: this.#history.canUndo,
       canRedo: this.#history.canRedo,
       dirty: this.#history.isDirty(),
@@ -810,6 +876,7 @@ export class CatlasEditor {
     this.#renderer.render({
       graph: this.#history.graph,
       selection: this.#selection,
+      preview: this.#changePreview,
       drawing: this.#drawing,
       transientNode: this.#transientNode,
       transform: this.#transform,
@@ -827,6 +894,7 @@ export class CatlasEditor {
 }
 
 export type { Operation, OperationId } from "./editor/operations";
+export type { ChangesetReview } from "./editor/changeset";
 export type {
   EditorAuthState,
   EditorMode,

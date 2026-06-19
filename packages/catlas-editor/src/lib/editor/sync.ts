@@ -1,7 +1,8 @@
+import type { ChangesetUploadPayload } from "@catlas/domain";
 import { Effect } from "effect";
 import type { Graph } from "../graph";
 import type { EditorApiService } from "./api-client";
-import { diffResultToRemaps, toChangesetUpload } from "./changeset";
+import { diffResultToRemaps } from "./changeset";
 import { viewportToEntities } from "./types";
 
 export const loadViewportEntities = (
@@ -11,11 +12,11 @@ export const loadViewportEntities = (
 
 export const saveGraph = (
   api: EditorApiService,
-  base: Graph,
   current: Graph,
+  payload: ChangesetUploadPayload,
   comment: string | null,
 ) =>
-  api.save(toChangesetUpload(base, current), comment).pipe(
+  api.save(payload, comment).pipe(
     Effect.map((result) => {
       const remaps = diffResultToRemaps(result);
       return {

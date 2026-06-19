@@ -58,6 +58,7 @@ function SavePanelContent({ editor }: { readonly editor: CatlasEditor }) {
         <Button
           aria-label="Save changes"
           disabled={!canSave}
+          size="sm"
           title={disabledReason ?? "Save changes"}
           type="button"
         >

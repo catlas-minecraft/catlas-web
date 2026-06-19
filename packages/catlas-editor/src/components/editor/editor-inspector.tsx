@@ -1,14 +1,8 @@
-import { MousePointer2Icon, PlusIcon, XIcon } from "lucide-react";
+import { PlusIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +16,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import type { CatlasEditor, EditorSnapshot } from "@/lib/editor";
 import { entityKey, geometryTypeForEntity } from "@/lib/editor/types";
+import { EditorChangesReview } from "./editor-changes-review";
 import { useEditorSnapshot } from "./use-editor-snapshot";
 
 const CUSTOM_PRESET = "__custom__";
@@ -49,21 +44,7 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
     : undefined;
 
   if (!entity) {
-    return (
-      <aside className="inspector">
-        <Empty className="h-full border-0">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <MousePointer2Icon />
-            </EmptyMedia>
-            <EmptyTitle>Select a feature</EmptyTitle>
-            <EmptyDescription>
-              Choose a point, line, or area on the map to edit its game data.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </aside>
-    );
+    return <EditorChangesReview editor={editor} snapshot={snapshot} />;
   }
 
   const addTag = () => {
@@ -81,16 +62,18 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
           <span className="eyebrow">{geometry}</span>
           <h2>{activePreset?.label ?? (entity.featureType || "Untyped feature")}</h2>
         </div>
-        <Badge className="font-mono" variant="outline">
-          {entity.type[0]}
-          {entity.id}
+        <Badge variant="outline">
+          <code>
+            {entity.type[0]}
+            {entity.id}
+          </code>
         </Badge>
       </header>
 
       <div className="inspector__body">
         <InspectorSection title="Feature">
-          <FieldGroup className="gap-4">
-            <Field>
+          <FieldGroup className="property-list">
+            <Field className="property-row" orientation="horizontal">
               <FieldLabel htmlFor="feature-preset">Preset</FieldLabel>
               <Select
                 onValueChange={(presetId) => {
@@ -98,7 +81,7 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
                 }}
                 value={activePreset?.id ?? CUSTOM_PRESET}
               >
-                <SelectTrigger className="w-full" id="feature-preset">
+                <SelectTrigger className="w-full" id="feature-preset" size="sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -113,8 +96,8 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
                 </SelectContent>
               </Select>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="feature-type">Feature type</FieldLabel>
+            <Field className="property-row" orientation="horizontal">
+              <FieldLabel htmlFor="feature-type">Type</FieldLabel>
               <Input
                 defaultValue={entity.featureType}
                 id="feature-type"
@@ -123,8 +106,8 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
               />
             </Field>
             {entity.type === "node" ? (
-              <Field>
-                <FieldLabel htmlFor="node-height">Height Y</FieldLabel>
+              <Field className="property-row" orientation="horizontal">
+                <FieldLabel htmlFor="node-height">Height</FieldLabel>
                 <Input
                   defaultValue={entity.geom.y}
                   id="node-height"
@@ -142,9 +125,9 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
           <>
             <Separator />
             <InspectorSection title="Details">
-              <FieldGroup className="gap-4">
+              <FieldGroup className="property-list">
                 {activePreset.fields.map((field) => (
-                  <Field key={field.key}>
+                  <Field className="property-row" key={field.key} orientation="horizontal">
                     <FieldLabel htmlFor={`preset-field-${field.key}`}>{field.label}</FieldLabel>
                     <Input
                       defaultValue={entity.tags[field.key] ?? ""}
@@ -184,27 +167,41 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
               </div>
             ))}
             {Object.keys(entity.tags).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No tags yet.</p>
+              <Empty className="tag-list__empty border-0">
+                <EmptyHeader>
+                  <EmptyDescription>No tags yet.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : null}
           </div>
-          <div className="tag-add">
-            <Input
-              aria-label="New tag key"
-              onChange={(event) => setNewTagKey(event.target.value)}
-              placeholder="key"
-              value={newTagKey}
-            />
-            <Input
-              aria-label="New tag value"
-              onChange={(event) => setNewTagValue(event.target.value)}
-              placeholder="value"
-              value={newTagValue}
-            />
+          <FieldGroup className="tag-add">
+            <Field>
+              <FieldLabel className="sr-only" htmlFor="new-tag-key">
+                New tag key
+              </FieldLabel>
+              <Input
+                id="new-tag-key"
+                onChange={(event) => setNewTagKey(event.target.value)}
+                placeholder="key"
+                value={newTagKey}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="sr-only" htmlFor="new-tag-value">
+                New tag value
+              </FieldLabel>
+              <Input
+                id="new-tag-value"
+                onChange={(event) => setNewTagValue(event.target.value)}
+                placeholder="value"
+                value={newTagValue}
+              />
+            </Field>
             <Button disabled={!newTagKey.trim()} onClick={addTag} size="sm" type="button">
               <PlusIcon data-icon="inline-start" />
               Add
             </Button>
-          </div>
+          </FieldGroup>
         </InspectorSection>
       </div>
     </aside>

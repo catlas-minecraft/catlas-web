@@ -17,9 +17,17 @@ type RendererOptions = {
 type RenderState = {
   readonly graph: Graph;
   readonly selection: EntityRef | null;
+  readonly preview: {
+    readonly graph: Graph;
+    readonly ref: EntityRef;
+  } | null;
   readonly drawing: DrawingState | null;
   readonly transientNode: { readonly id: number; readonly geom: Point3D } | null;
   readonly transform: d3.ZoomTransform;
+};
+
+type NodeVisibilityOptions = {
+  readonly showLineVertices?: boolean;
 };
 
 const pathForWay = (
@@ -41,9 +49,17 @@ const pathForWay = (
 export const visibleNodesForSelection = (
   graph: Graph,
   selection: EntityRef | null,
+  options: NodeVisibilityOptions = {},
 ): readonly NodeEntity[] => {
   const vertexNodeIds = new Set(graph.ways().flatMap((way) => way.nodeIds));
   const visibleVertexNodeIds = new Set<number>();
+
+  if (options.showLineVertices) {
+    for (const way of graph.ways()) {
+      if (way.geometryKind !== "line") continue;
+      for (const nodeId of way.nodeIds) visibleVertexNodeIds.add(nodeId);
+    }
+  }
 
   if (selection?.type === "way") {
     for (const nodeId of graph.way(selection.id)?.nodeIds ?? []) {
@@ -67,6 +83,7 @@ export class EntitySvgLayer {
   readonly #hitAreas: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #nodes: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #midpoints: d3.Selection<SVGGElement, unknown, null, undefined>;
+  readonly #preview: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #draft: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #options: RendererOptions;
 
@@ -77,6 +94,7 @@ export class EntitySvgLayer {
     this.#hitAreas = this.#root.append("g").attr("class", "entity-layer entity-layer--hits");
     this.#nodes = this.#root.append("g").attr("class", "entity-layer entity-layer--nodes");
     this.#midpoints = this.#root.append("g").attr("class", "entity-layer entity-layer--midpoints");
+    this.#preview = this.#root.append("g").attr("class", "entity-layer entity-layer--preview");
     this.#draft = this.#root.append("g").attr("class", "entity-layer entity-layer--draft");
     this.#options = options;
   }
@@ -115,7 +133,12 @@ export class EntitySvgLayer {
 
     this.#nodes
       .selectAll<SVGCircleElement, ReturnType<Graph["nodes"]>[number]>("circle.entity-node")
-      .data(visibleNodesForSelection(graph, selection), (node) => node.id)
+      .data(
+        visibleNodesForSelection(graph, selection, {
+          showLineVertices: drawing?.geometryKind === "line",
+        }),
+        (node) => node.id,
+      )
       .join("circle")
       .attr("class", (node) => {
         const selected = selectedKey === entityKey(node) ? " is-selected" : "";
@@ -184,6 +207,26 @@ export class EntitySvgLayer {
         ),
       )
       .on("click", (event: MouseEvent) => event.stopPropagation());
+
+    const previewEntity = state.preview?.graph.entity(state.preview.ref);
+    const previewWay = previewEntity?.type === "way" ? previewEntity : null;
+    const previewNode = previewEntity?.type === "node" ? previewEntity : null;
+
+    this.#preview
+      .selectAll<SVGPathElement, WayEntity>("path.entity-preview--way")
+      .data(previewWay ? [previewWay] : [], (way) => entityKey(way))
+      .join("path")
+      .attr("class", "entity-preview entity-preview--way is-deleted")
+      .attr("d", (way) => pathForWay(state.preview!.graph, way, transform, null));
+
+    this.#preview
+      .selectAll<SVGCircleElement, NodeEntity>("circle.entity-preview--node")
+      .data(previewNode ? [previewNode] : [], (node) => entityKey(node))
+      .join("circle")
+      .attr("class", "entity-preview entity-preview--node is-deleted")
+      .attr("cx", (node) => worldToScreen(transform, node.geom)[0])
+      .attr("cy", (node) => worldToScreen(transform, node.geom)[1])
+      .attr("r", 9);
 
     const draftPoints = drawing?.vertices.map((vertex) => vertex.point) ?? [];
     const draftPathPoints = drawing?.pointer ? [...draftPoints, drawing.pointer] : draftPoints;

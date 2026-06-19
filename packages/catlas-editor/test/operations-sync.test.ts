@@ -6,6 +6,7 @@ import {
   type EditorApiService,
   toEditorApiError,
 } from "../src/lib/editor/api-client";
+import { toChangesetUpload } from "../src/lib/editor/changeset";
 import { getOperation } from "../src/lib/editor/operations";
 import { loadViewportEntities, saveGraph } from "../src/lib/editor/sync";
 import { line, node } from "./helpers";
@@ -86,7 +87,9 @@ describe("API synchronization", () => {
     const base = new Graph();
     const current = new Graph([node(-1), line(-1, [-1, -1])]);
 
-    const saved = await Effect.runPromise(saveGraph(api, base, current, "test"));
+    const saved = await Effect.runPromise(
+      saveGraph(api, current, toChangesetUpload(base, current), "test"),
+    );
     expect(uploadedNodeId).toBe(-1);
     expect(saved.graph.node(101)?.version).toBe(1);
     expect(saved.graph.way(201)?.nodeIds).toEqual([101, 101]);
@@ -100,8 +103,10 @@ describe("API synchronization", () => {
       save: () => Effect.fail(conflict),
     };
 
+    const base = new Graph();
+    const current = new Graph([node(-1)]);
     const exit = await Effect.runPromiseExit(
-      saveGraph(api, new Graph(), new Graph([node(-1)]), null),
+      saveGraph(api, current, toChangesetUpload(base, current), null),
     );
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {

@@ -3,8 +3,11 @@ import { visibleNodesForSelection } from "../src/lib/editor/renderer";
 import { Graph } from "../src/lib/graph";
 import { area, line, node } from "./helpers";
 
-const visibleIds = (graph: Graph, selection: Parameters<typeof visibleNodesForSelection>[1]) =>
-  visibleNodesForSelection(graph, selection).map((entity) => entity.id);
+const visibleIds = (
+  graph: Graph,
+  selection: Parameters<typeof visibleNodesForSelection>[1],
+  options?: Parameters<typeof visibleNodesForSelection>[2],
+) => visibleNodesForSelection(graph, selection, options).map((entity) => entity.id);
 
 describe("renderer node visibility", () => {
   const graph = new Graph([
@@ -32,5 +35,9 @@ describe("renderer node visibility", () => {
 
   test("keeps standalone point nodes visible", () => {
     expect(visibleIds(graph, { type: "node", id: 9 })).toEqual([9]);
+  });
+
+  test("shows line vertices while drawing a line", () => {
+    expect(visibleIds(graph, null, { showLineVertices: true })).toEqual([1, 2, 3, 9]);
   });
 });
