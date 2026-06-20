@@ -217,6 +217,7 @@ export class EntitySvgLayer {
       .data(previewWay ? [previewWay] : [], (way) => entityKey(way))
       .join("path")
       .attr("class", "entity-preview entity-preview--way is-deleted")
+      .classed("entity-preview--line", (way) => way.geometryKind === "line")
       .attr("d", (way) => pathForWay(state.preview!.graph, way, transform, null));
 
     this.#preview
@@ -238,7 +239,7 @@ export class EntitySvgLayer {
       .selectAll<SVGPathElement, string>("path.draft-way")
       .data(draftPath ? [draftPath] : [])
       .join("path")
-      .attr("class", "draft-way")
+      .attr("class", `draft-way draft-way--${drawing?.geometryKind ?? "line"}`)
       .attr("d", (path) => path);
 
     this.#draft

@@ -707,6 +707,7 @@ export class CatlasEditor {
           previous.point.x === vertex.point.x &&
           previous.point.z === vertex.point.z))
     ) {
+      if (this.#drawing.geometryKind === "line") this.finishDrawing();
       return;
     }
 

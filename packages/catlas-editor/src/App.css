@@ -261,6 +261,10 @@
   vector-effect: non-scaling-stroke;
 }
 
+.draft-way--line {
+  fill: none;
+}
+
 .draft-node {
   fill: var(--background);
   pointer-events: none;
@@ -280,6 +284,10 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 3;
+}
+
+.entity-preview--line {
+  fill: none;
 }
 
 .entity-preview--node {
