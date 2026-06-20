@@ -19,6 +19,9 @@
     "coverage": "vp test --coverage",
     "prepare": "vp config"
   },
+  "dependencies": {
+    "vite-plus": "catalog:"
+  },
   "devDependencies": {
     "@effect/build-utils": "^0.7.9",
     "@effect/language-service": "0.81.0",
@@ -31,7 +34,6 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "catalog:",
-    "vite-plus": "catalog:",
     "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.18"
   },
   "packageManager": "pnpm@10.14.0",

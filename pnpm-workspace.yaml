@@ -2,10 +2,10 @@ packages:
   - packages/*
 
 catalog:
+  portless: 0.13.0
   vite: npm:@voidzero-dev/vite-plus-core@^0.1.18
   vite-plus: 0.1.18
   vitest: npm:@voidzero-dev/vite-plus-test@^0.1.18
-  portless: 0.13.0
 
 overrides:
   vite: "catalog:"
