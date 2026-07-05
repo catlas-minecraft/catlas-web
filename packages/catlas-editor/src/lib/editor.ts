@@ -14,6 +14,7 @@ import {
 import { buildChangesetReview, type ChangesetReview } from "./editor/changeset";
 import { History } from "./editor/history";
 import { getOperation, type Operation, type OperationId } from "./editor/operations";
+import { CanvasClickSuppression } from "./editor/input";
 import {
   DEFAULT_PRESETS,
   defaultPresetForGeometry,
@@ -117,6 +118,7 @@ export class CatlasEditor {
   #activeDrag: ActiveDrag | null = null;
   #authSession: StoredAuthSession | null = null;
   #authState: EditorAuthState = { status: "anonymous" };
+  readonly #canvasClickSuppression = new CanvasClickSuppression();
   #changePreview: ChangePreview | null = null;
   #changesetReviewCache: {
     readonly base: Graph;
@@ -531,6 +533,7 @@ export class CatlasEditor {
     this.#disposed = true;
     this.#requestId += 1;
     if (this.#cursorFrame !== null) cancelAnimationFrame(this.#cursorFrame);
+    this.#canvasClickSuppression.clear();
     this.#resizeObserver.disconnect();
     this.#overlay.on(".zoom", null).on(".editor", null);
     this.#renderer.destroy();
@@ -564,6 +567,12 @@ export class CatlasEditor {
   }
 
   #handleCanvasClick(event: MouseEvent) {
+    if (this.#canvasClickSuppression.consume()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     const contextMenuCleared = this.#clearContextMenu();
     const point = this.#pointFromEvent(event);
     if (this.#mode === "add-point") {
@@ -607,6 +616,7 @@ export class CatlasEditor {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    this.#canvasClickSuppression.arm();
     const contextMenuCleared = this.#clearContextMenu();
     const entity = this.#history.graph.entity(ref);
     if (!entity) {
@@ -658,6 +668,7 @@ export class CatlasEditor {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    this.#canvasClickSuppression.arm();
     const contextMenuCleared = this.#clearContextMenu();
     if (this.#mode !== "browse") {
       if (contextMenuCleared) this.#emit();
@@ -725,6 +736,7 @@ export class CatlasEditor {
   }
 
   #handlePointerUp(event: PointerEvent) {
+    this.#canvasClickSuppression.releaseAfterPointerEnd();
     const drag = this.#activeDrag;
     if (!drag || drag.pointerId !== event.pointerId) return;
     this.#activeDrag = null;

@@ -144,9 +144,6 @@ importers:
       d3:
         specifier: ^7.9.0
         version: 7.9.0
-      d3-zoom:
-        specifier: ^3.0.0
-        version: 3.0.0
       effect:
         specifier: 3.21.0
         version: 3.21.0
@@ -181,9 +178,6 @@ importers:
       '@types/d3':
         specifier: ^7.4.3
         version: 7.4.3
-      '@types/d3-zoom':
-        specifier: ^3.0.8
-        version: 3.0.8
       '@types/node':
         specifier: ^24.12.2
         version: 24.12.2
