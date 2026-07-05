@@ -9,11 +9,17 @@ import {
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import {
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
 import { Spinner } from "@/components/ui/spinner";
 import type { CatlasEditor, EditorSnapshot } from "@/lib/editor";
 import { entityKey } from "@/lib/editor/types";
 import { useEditorSnapshot } from "./use-editor-snapshot";
-import { Separator } from "../ui/separator";
 
 export function EditorMapOverlays({ editor }: { readonly editor: CatlasEditor | null }) {
   if (!editor) {
@@ -74,64 +80,59 @@ function EditorContextMenu({
       : null;
 
   return (
-    <div
-      aria-label="Editor context menu"
-      className="editor-context-menu flex flex-col gap-2 absolute min-w-29 p-[7px_8px] z-18 rounded-sm border border-border bg-popover/98 text-popover-foreground shadow-[0_12px_30px_color-mix(in_oklab,var(--foreground)_16%,transparent)] select-none translate-x-0.5 translate-y-0.5"
-      style={{ left: contextMenu.x, top: contextMenu.y }}
-    >
+    <ContextMenuContent aria-label="Editor context menu" className="editor-context-menu min-w-44">
       {targetEntity ? (
-        <div className="editor-context-menu__target mb-0.5 min-w-0">
-          <div className="editor-context-menu__title text-xs font-[650] leading-tight">
+        <ContextMenuLabel className="editor-context-menu__target flex min-w-0 flex-col gap-0.5 text-popover-foreground">
+          <span className="editor-context-menu__title text-xs font-[650] leading-tight">
             {formatEntityKind(targetEntity)}
-          </div>
-          <div className="editor-context-menu__meta flex items-center gap-1.25 text-muted-foreground text-[10px] leading-[1.35] mt-0.5 min-w-0">
+          </span>
+          <span className="editor-context-menu__meta flex min-w-0 items-center gap-1.5 text-muted-foreground text-[10px] leading-snug">
             <code className="font-mono">{entityKey(targetEntity)}</code>
-            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-              {targetEntity.featureType || "Untyped feature"}
-            </span>
-          </div>
-        </div>
+            <span className="truncate">{targetEntity.featureType || "Untyped feature"}</span>
+          </span>
+        </ContextMenuLabel>
       ) : (
-        <div className="editor-context-menu__title text-xs font-[650] leading-tight">
+        <ContextMenuLabel className="editor-context-menu__title text-xs font-[650] leading-tight text-popover-foreground">
           Nothing here
-        </div>
+        </ContextMenuLabel>
       )}
-      <Separator />
 
-      {joinOperation ? (
-        <Button
-          className="editor-context-menu__item h-7 justify-start mt-1 px-1.5 w-full"
-          disabled={!joinOperation.available}
-          onClick={joinOperation.execute}
-          size="sm"
-          title={joinOperation.disabledReason ?? joinOperation.label}
-          type="button"
-          variant="ghost"
-        >
-          <GitMergeIcon data-icon="inline-start" />
-          {joinOperation.label}
-        </Button>
+      {joinOperation || deleteOperation ? (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuGroup>
+            {joinOperation ? (
+              <ContextMenuItem
+                className="editor-context-menu__item"
+                disabled={!joinOperation.available}
+                onSelect={() => joinOperation.execute()}
+                title={joinOperation.disabledReason ?? joinOperation.label}
+              >
+                <GitMergeIcon />
+                {joinOperation.label}
+              </ContextMenuItem>
+            ) : null}
+            {deleteOperation ? (
+              <ContextMenuItem
+                className="editor-context-menu__item"
+                disabled={!deleteOperation.available}
+                onSelect={() => deleteOperation.execute()}
+                title={deleteOperation.disabledReason ?? deleteOperation.label}
+                variant="destructive"
+              >
+                <Trash2Icon />
+                {deleteOperation.label}
+              </ContextMenuItem>
+            ) : null}
+          </ContextMenuGroup>
+        </>
       ) : null}
-      {deleteOperation ? (
-        <Button
-          className="editor-context-menu__item h-7 justify-start mt-1 px-1.5 w-full"
-          disabled={!deleteOperation.available}
-          onClick={deleteOperation.execute}
-          size="sm"
-          title={deleteOperation.disabledReason ?? deleteOperation.label}
-          type="button"
-          variant="destructive"
-        >
-          <Trash2Icon data-icon="inline-start" />
-          {deleteOperation.label}
-        </Button>
-      ) : null}
-      <Separator />
-      <div className="editor-context-menu__coords text-muted-foreground font-mono text-[10px] leading-[1.4] mt-0.75 whitespace-nowrap">
+      <ContextMenuSeparator />
+      <ContextMenuLabel className="editor-context-menu__coords whitespace-nowrap font-mono text-[10px] leading-snug">
         X {formatCoordinate(contextMenu.world.x)}&nbsp;&nbsp; Z{" "}
         {formatCoordinate(contextMenu.world.z)}
-      </div>
-    </div>
+      </ContextMenuLabel>
+    </ContextMenuContent>
   );
 }
 

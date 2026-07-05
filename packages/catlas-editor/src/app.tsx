@@ -4,6 +4,7 @@ import "./App.css";
 import { EditorInspector } from "./components/editor/editor-inspector";
 import { EditorMapOverlays } from "./components/editor/editor-map-overlays";
 import { EditorToolRail, EditorTopBar } from "./components/editor/editor-toolbar";
+import { ContextMenu, ContextMenuTrigger } from "./components/ui/context-menu";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable";
 import { CatlasEditor } from "./lib/editor";
 
@@ -70,13 +71,22 @@ export default function App() {
         >
           <ResizablePanel id={CANVAS_PANEL_ID} minSize={360}>
             <main className="workspace relative h-full min-h-0 min-w-0 overflow-hidden">
-              <div className="map-frame relative h-full min-h-0 min-w-0 overflow-hidden">
-                <div
-                  className="map-pane absolute inset-0 overflow-hidden bg-editor-canvas"
-                  ref={mapRef}
-                />
-                <EditorMapOverlays editor={editor} />
-              </div>
+              <ContextMenu
+                modal={false}
+                onOpenChange={(open) => {
+                  if (!open) editor?.closeContextMenu();
+                }}
+              >
+                <div className="map-frame relative h-full min-h-0 min-w-0 overflow-hidden">
+                  <ContextMenuTrigger asChild disabled={!editor}>
+                    <div
+                      className="map-pane absolute inset-0 overflow-hidden bg-editor-canvas"
+                      ref={mapRef}
+                    />
+                  </ContextMenuTrigger>
+                  <EditorMapOverlays editor={editor} />
+                </div>
+              </ContextMenu>
             </main>
           </ResizablePanel>
           <ResizableHandle className="inspector-resize-handle bg-border transition-colors duration-150 ease z-[11] hover:bg-editor-selection focus-visible:bg-editor-selection" />

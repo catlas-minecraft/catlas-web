@@ -66,6 +66,12 @@ type ChangePreview = {
   readonly ref: EntityRef;
 };
 
+const ENTITY_CONTEXT_MENU_EVENT = Symbol("catlas.entity-context-menu");
+
+type EntityContextMenuEvent = MouseEvent & {
+  [ENTITY_CONTEXT_MENU_EVENT]?: true;
+};
+
 const modeGeometry = (mode: EditorMode) => {
   if (mode === "add-point") return "point";
   if (mode === "draw-line") return "line";
@@ -546,6 +552,10 @@ export class CatlasEditor {
     return true;
   }
 
+  closeContextMenu() {
+    if (this.#clearContextMenu()) this.#emit();
+  }
+
   #updateSelection(properties: Parameters<typeof updateEntityProperties>[1], annotation: string) {
     if (!this.#selection) return;
     if (this.#history.perform(updateEntityProperties(this.#selection, properties), annotation)) {
@@ -571,13 +581,12 @@ export class CatlasEditor {
   }
 
   #handleCanvasContextMenu(event: MouseEvent) {
-    event.preventDefault();
+    if ((event as EntityContextMenuEvent)[ENTITY_CONTEXT_MENU_EVENT]) return;
     this.#openContextMenu(event, null);
   }
 
   #handleEntityContextMenu(event: MouseEvent, ref: EntityRef) {
-    event.preventDefault();
-    event.stopPropagation();
+    (event as EntityContextMenuEvent)[ENTITY_CONTEXT_MENU_EVENT] = true;
     if (!this.#history.graph.has(ref)) return;
     this.#openContextMenu(event, ref);
   }
