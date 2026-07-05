@@ -24,25 +24,17 @@
         packages = with pkgs; [
           nodejs
           vp
-
-          corepack
+          pnpm_10
 
           git
           jq
-          python3
-          pkg-config
-          openssl
         ];
 
         shellHook = ''
           export PATH="$PWD/node_modules/.bin:$PATH"
-          export COREPACK_HOME="$PWD/.cache/corepack"
-
-          mkdir -p "$COREPACK_HOME"
 
           echo "Node: $(node -v)"
           echo "pnpm:  $(pnpm -v)"
-          echo "Corepack: $(corepack --version)"
         '';
       };
     };
