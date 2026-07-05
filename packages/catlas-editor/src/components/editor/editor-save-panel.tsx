@@ -70,14 +70,18 @@ function SavePanelContent({ editor }: { readonly editor: CatlasEditor }) {
           {isSaving ? "Saving..." : "Save"}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="save-panel" sideOffset={10}>
+      <PopoverContent
+        align="end"
+        className="save-panel w-[calc(100vw-28px)] min-[860px]:w-[min(360px,calc(100vw-28px))]"
+        sideOffset={10}
+      >
         <PopoverHeader>
           <PopoverTitle>Save changes</PopoverTitle>
           <PopoverDescription>
             Add an optional message before publishing this changeset.
           </PopoverDescription>
         </PopoverHeader>
-        <form className="save-panel__form" onSubmit={handleSubmit}>
+        <form className="save-panel__form flex flex-col gap-3" onSubmit={handleSubmit}>
           <FieldGroup className="gap-3">
             <Field>
               <FieldLabel htmlFor="changeset-comment">Message</FieldLabel>
@@ -97,7 +101,7 @@ function SavePanelContent({ editor }: { readonly editor: CatlasEditor }) {
               </FieldDescription>
             </Field>
           </FieldGroup>
-          <div className="save-panel__actions">
+          <div className="save-panel__actions flex justify-end">
             <Button disabled={!canSave} type="submit">
               {isSaving ? (
                 <Spinner data-icon="inline-start" />

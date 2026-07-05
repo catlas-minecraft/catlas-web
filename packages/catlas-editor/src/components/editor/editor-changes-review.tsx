@@ -74,12 +74,14 @@ export function EditorChangesReview({
   };
 
   return (
-    <aside className="inspector changes-review">
-      <header className="changes-review__header">
+    <aside className="inspector changes-review flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden">
+      <header className="changes-review__header flex items-start justify-between gap-2 flex-[0_0_auto] min-h-[74px] p-3 border-b border-border [&>div]:min-w-0">
         <div>
-          <span className="eyebrow">Changeset</span>
-          <h2>Changes</h2>
-          <p>
+          <span className="eyebrow text-muted-foreground text-[9px] font-[750] tracking-[0.12em] uppercase">
+            Changeset
+          </span>
+          <h2 className="text-sm font-[650] leading-tight mt-0.5">Changes</h2>
+          <p className="text-muted-foreground text-[11px] mt-[3px]">
             {review.counts.total === 1
               ? "1 pending change"
               : `${review.counts.total} pending changes`}
@@ -93,13 +95,16 @@ export function EditorChangesReview({
       </header>
 
       <Tabs
-        className="changes-review__tabs"
+        className="changes-review__tabs flex-1 gap-0 min-h-0 overflow-hidden"
         defaultValue="review"
         onValueChange={(value) => {
           if (value !== "review") clearPreview();
         }}
       >
-        <TabsList className="changes-review__tab-list" variant="line">
+        <TabsList
+          className="changes-review__tab-list flex-[0_0_auto] mx-3 w-[calc(100%-24px)]"
+          variant="line"
+        >
           <TabsTrigger value="review">Review</TabsTrigger>
           <TabsTrigger value="payload">
             <BracesIcon data-icon="inline-start" />
@@ -107,10 +112,13 @@ export function EditorChangesReview({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent className="changes-review__content" value="review">
+        <TabsContent
+          className="changes-review__content m-0 min-h-0 overflow-auto overscroll-contain"
+          value="review"
+        >
           <ReviewSummary review={review} />
           {review.counts.total === 0 ? (
-            <Empty className="changes-review__empty border-0">
+            <Empty className="changes-review__empty min-h-[240px] border-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <CircleCheckIcon />
@@ -120,7 +128,7 @@ export function EditorChangesReview({
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="changes-review__groups">
+            <div className="changes-review__groups flex flex-col gap-[18px] p-3">
               {KINDS.map((kind) => (
                 <ChangeGroup
                   entries={review.entries.filter((entry) => entry.kind === kind)}
@@ -134,12 +142,15 @@ export function EditorChangesReview({
           )}
         </TabsContent>
 
-        <TabsContent className="changes-review__content" value="payload">
-          <div className="changes-review__payload-header">
+        <TabsContent
+          className="changes-review__content m-0 min-h-0 overflow-auto overscroll-contain"
+          value="payload"
+        >
+          <div className="changes-review__payload-header flex items-center justify-between text-[11px] font-[650] p-[10px_12px] border-b border-border">
             <span>Upload payload</span>
             <Badge variant="outline">JSON</Badge>
           </div>
-          <pre className="changes-review__payload">
+          <pre className="changes-review__payload bg-muted font-mono text-[10px] leading-[1.55] m-3 min-h-[calc(100%-58px)] overflow-auto p-2.5 [tab-size:2]">
             <code>{JSON.stringify(review.payload, null, 2)}</code>
           </pre>
         </TabsContent>
@@ -150,7 +161,10 @@ export function EditorChangesReview({
 
 function ReviewSummary({ review }: { readonly review: ChangesetReview }) {
   return (
-    <div className="changes-review__summary" aria-label="Change counts">
+    <div
+      className="changes-review__summary flex flex-wrap gap-[6px] p-[10px_12px] border-b border-border"
+      aria-label="Change counts"
+    >
       <Badge variant="secondary">{review.counts.created} created</Badge>
       <Badge variant="secondary">{review.counts.modified} modified</Badge>
       <Badge variant={review.counts.deleted ? "destructive" : "secondary"}>
@@ -175,9 +189,9 @@ function ChangeGroup({
   const details = KIND_DETAILS[kind];
 
   return (
-    <section className="change-group">
-      <header className="change-group__header">
-        <h3>{details.heading}</h3>
+    <section className="change-group flex flex-col gap-2">
+      <header className="change-group__header flex items-center justify-between">
+        <h3 className="text-[11px] font-[650] m-0">{details.heading}</h3>
         <Badge variant="outline">{entries.length}</Badge>
       </header>
       <ItemGroup>
@@ -210,7 +224,7 @@ function ChangeItem({
     <Item asChild size="xs" variant={active ? "muted" : "outline"}>
       <button
         aria-pressed={entry.kind === "delete" ? active : undefined}
-        className="change-item"
+        className="change-item bg-transparent text-inherit cursor-pointer font-inherit text-left aria-pressed:border-destructive"
         onClick={() => onSelect(entry)}
         type="button"
       >
@@ -232,14 +246,29 @@ function ChangeItem({
           </ItemActions>
         </ItemHeader>
 
-        <div className="change-item__fields">
+        <div className="change-item__fields flex flex-col gap-[5px] min-w-0 basis-full">
           {entry.fields.map((field) => (
-            <div className="change-field" key={field.key}>
-              <span>{field.label}</span>
-              <div className="change-field__values">
-                {entry.kind !== "create" ? <code>{formatValue(field.before)}</code> : null}
-                {entry.kind === "modify" ? <ArrowRightIcon aria-hidden="true" /> : null}
-                {entry.kind !== "delete" ? <code>{formatValue(field.after)}</code> : null}
+            <div
+              className="change-field items-start grid gap-[6px] grid-cols-[minmax(58px,78px)_minmax(0,1fr)]"
+              key={field.key}
+            >
+              <span className="text-muted-foreground text-[10px] leading-[1.6] [overflow-wrap:anywhere]">
+                {field.label}
+              </span>
+              <div className="change-field__values flex flex-wrap gap-1 items-center min-w-0">
+                {entry.kind !== "create" ? (
+                  <code className="bg-muted rounded-sm text-[10px] leading-[1.4] max-w-full [overflow-wrap:anywhere] px-1 py-0.5">
+                    {formatValue(field.before)}
+                  </code>
+                ) : null}
+                {entry.kind === "modify" ? (
+                  <ArrowRightIcon className="text-muted-foreground h-3 w-3" aria-hidden="true" />
+                ) : null}
+                {entry.kind !== "delete" ? (
+                  <code className="bg-muted rounded-sm text-[10px] leading-[1.4] max-w-full [overflow-wrap:anywhere] px-1 py-0.5">
+                    {formatValue(field.after)}
+                  </code>
+                ) : null}
               </div>
             </div>
           ))}

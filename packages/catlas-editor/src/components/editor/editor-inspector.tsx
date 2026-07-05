@@ -22,7 +22,8 @@ import { useEditorSnapshot } from "./use-editor-snapshot";
 const CUSTOM_PRESET = "__custom__";
 
 export function EditorInspector({ editor }: { readonly editor: CatlasEditor | null }) {
-  if (!editor) return <aside className="inspector" />;
+  if (!editor)
+    return <aside className="inspector flex flex-col h-full min-h-0 min-w-0 bg-background" />;
   return <InspectorContent editor={editor} />;
 }
 
@@ -56,11 +57,15 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
   };
 
   return (
-    <aside className="inspector">
-      <header className="inspector__header">
+    <aside className="inspector flex flex-col h-full min-h-0 min-w-0 bg-background">
+      <header className="inspector__header flex items-start justify-between gap-2 flex-[0_0_auto] min-h-16 border-b border-border p-3 [&>div]:min-w-0">
         <div>
-          <span className="eyebrow">{geometry}</span>
-          <h2>{activePreset?.label ?? (entity.featureType || "Untyped feature")}</h2>
+          <span className="eyebrow text-muted-foreground text-[9px] font-[750] tracking-[0.12em] uppercase">
+            {geometry}
+          </span>
+          <h2 className="text-sm font-[650] leading-tight mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
+            {activePreset?.label ?? (entity.featureType || "Untyped feature")}
+          </h2>
         </div>
         <Badge variant="outline">
           <code>
@@ -70,18 +75,26 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
         </Badge>
       </header>
 
-      <div className="inspector__body">
+      <div className="inspector__body min-h-0 overflow-y-auto overscroll-contain">
         <InspectorSection title="Feature">
-          <FieldGroup className="property-list">
-            <Field className="property-row" orientation="horizontal">
-              <FieldLabel htmlFor="feature-preset">Preset</FieldLabel>
+          <FieldGroup className="property-list gap-2">
+            <Field
+              className="property-row items-center grid gap-2 grid-cols-[minmax(64px,80px)_minmax(0,1fr)]"
+              orientation="horizontal"
+            >
+              <FieldLabel
+                className="text-muted-foreground text-[11px] min-w-0"
+                htmlFor="feature-preset"
+              >
+                Preset
+              </FieldLabel>
               <Select
                 onValueChange={(presetId) => {
                   if (presetId !== CUSTOM_PRESET) editor.applyPreset(presetId);
                 }}
                 value={activePreset?.id ?? CUSTOM_PRESET}
               >
-                <SelectTrigger className="w-full" id="feature-preset" size="sm">
+                <SelectTrigger className="w-full h-7 min-w-0" id="feature-preset" size="sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -96,9 +109,18 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
                 </SelectContent>
               </Select>
             </Field>
-            <Field className="property-row" orientation="horizontal">
-              <FieldLabel htmlFor="feature-type">Type</FieldLabel>
+            <Field
+              className="property-row items-center grid gap-2 grid-cols-[minmax(64px,80px)_minmax(0,1fr)]"
+              orientation="horizontal"
+            >
+              <FieldLabel
+                className="text-muted-foreground text-[11px] min-w-0"
+                htmlFor="feature-type"
+              >
+                Type
+              </FieldLabel>
               <Input
+                className="h-7 min-w-0 w-full"
                 defaultValue={entity.featureType}
                 id="feature-type"
                 key={`${entity.type}-${entity.id}-feature-${entity.featureType}`}
@@ -106,9 +128,18 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
               />
             </Field>
             {entity.type === "node" ? (
-              <Field className="property-row" orientation="horizontal">
-                <FieldLabel htmlFor="node-height">Height</FieldLabel>
+              <Field
+                className="property-row items-center grid gap-2 grid-cols-[minmax(64px,80px)_minmax(0,1fr)]"
+                orientation="horizontal"
+              >
+                <FieldLabel
+                  className="text-muted-foreground text-[11px] min-w-0"
+                  htmlFor="node-height"
+                >
+                  Height
+                </FieldLabel>
                 <Input
+                  className="h-7 min-w-0 w-full"
                   defaultValue={entity.geom.y}
                   id="node-height"
                   key={`node-${entity.id}-y-${entity.geom.y}`}
@@ -125,11 +156,21 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
           <>
             <Separator />
             <InspectorSection title="Details">
-              <FieldGroup className="property-list">
+              <FieldGroup className="property-list gap-2">
                 {activePreset.fields.map((field) => (
-                  <Field className="property-row" key={field.key} orientation="horizontal">
-                    <FieldLabel htmlFor={`preset-field-${field.key}`}>{field.label}</FieldLabel>
+                  <Field
+                    className="property-row items-center grid gap-2 grid-cols-[minmax(64px,80px)_minmax(0,1fr)]"
+                    key={field.key}
+                    orientation="horizontal"
+                  >
+                    <FieldLabel
+                      className="text-muted-foreground text-[11px] min-w-0"
+                      htmlFor={`preset-field-${field.key}`}
+                    >
+                      {field.label}
+                    </FieldLabel>
                     <Input
+                      className="h-7 min-w-0 w-full"
                       defaultValue={entity.tags[field.key] ?? ""}
                       id={`preset-field-${field.key}`}
                       key={`${entityKey(entity)}-${field.key}-${entity.tags[field.key] ?? ""}`}
@@ -145,11 +186,20 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
 
         <Separator />
         <InspectorSection title="All tags">
-          <div className="tag-list">
+          <div className="tag-list grid gap-[6px]">
             {Object.entries(entity.tags).map(([key, value]) => (
-              <div className="tag-row" key={key}>
-                <code title={key}>{key}</code>
+              <div
+                className="tag-row items-center grid gap-[5px] grid-cols-[minmax(54px,72px)_minmax(0,1fr)_24px]"
+                key={key}
+              >
+                <code
+                  className="text-muted-foreground text-[10px] overflow-hidden text-ellipsis whitespace-nowrap"
+                  title={key}
+                >
+                  {key}
+                </code>
                 <Input
+                  className="h-7 min-w-0 w-full"
                   aria-label={`${key} value`}
                   defaultValue={value}
                   key={`${entityKey(entity)}-${key}-${value}`}
@@ -167,30 +217,32 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
               </div>
             ))}
             {Object.keys(entity.tags).length === 0 ? (
-              <Empty className="tag-list__empty border-0">
+              <Empty className="tag-list__empty flex-none min-h-[52px] p-3 border-0">
                 <EmptyHeader>
                   <EmptyDescription>No tags yet.</EmptyDescription>
                 </EmptyHeader>
               </Empty>
             ) : null}
           </div>
-          <FieldGroup className="tag-add">
-            <Field>
+          <FieldGroup className="tag-add items-end grid gap-[5px] grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_auto] mt-2">
+            <Field className="gap-0 min-w-0">
               <FieldLabel className="sr-only" htmlFor="new-tag-key">
                 New tag key
               </FieldLabel>
               <Input
+                className="h-7 min-w-0 w-full"
                 id="new-tag-key"
                 onChange={(event) => setNewTagKey(event.target.value)}
                 placeholder="key"
                 value={newTagKey}
               />
             </Field>
-            <Field>
+            <Field className="gap-0 min-w-0">
               <FieldLabel className="sr-only" htmlFor="new-tag-value">
                 New tag value
               </FieldLabel>
               <Input
+                className="h-7 min-w-0 w-full"
                 id="new-tag-value"
                 onChange={(event) => setNewTagValue(event.target.value)}
                 placeholder="value"
@@ -210,8 +262,8 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
 
 function InspectorSection({ children, title }: { children: React.ReactNode; title: string }) {
   return (
-    <section className="form-section">
-      <h3>{title}</h3>
+    <section className="form-section p-3">
+      <h3 className="text-[11px] font-[650] mb-2.5 mt-0">{title}</h3>
       {children}
     </section>
   );

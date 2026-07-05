@@ -58,9 +58,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className="editor-shell">
+    <div className="editor-shell grid grid-rows-[44px_minmax(0,1fr)] h-dvh w-screen overflow-hidden bg-background text-foreground">
       <EditorTopBar editor={editor} />
-      <div className="editor-body">
+      <div className="editor-body grid grid-cols-[48px_minmax(0,1fr)] min-h-0 min-w-0">
         <EditorToolRail editor={editor} />
         <ResizablePanelGroup
           defaultLayout={defaultLayout}
@@ -69,14 +69,17 @@ export default function App() {
           orientation="horizontal"
         >
           <ResizablePanel id={CANVAS_PANEL_ID} minSize={360}>
-            <main className="workspace">
-              <div className="map-frame">
-                <div className="map-pane" ref={mapRef} />
+            <main className="workspace relative h-full min-h-0 min-w-0 overflow-hidden">
+              <div className="map-frame relative h-full min-h-0 min-w-0 overflow-hidden">
+                <div
+                  className="map-pane absolute inset-0 overflow-hidden bg-editor-canvas"
+                  ref={mapRef}
+                />
                 <EditorMapOverlays editor={editor} />
               </div>
             </main>
           </ResizablePanel>
-          <ResizableHandle className="inspector-resize-handle" />
+          <ResizableHandle className="inspector-resize-handle bg-border transition-colors duration-150 ease z-[11] hover:bg-editor-selection focus-visible:bg-editor-selection" />
           <ResizablePanel
             defaultSize={300}
             groupResizeBehavior="preserve-pixel-size"

@@ -59,14 +59,22 @@ const THEME_OPTIONS: readonly {
 
 export function EditorTopBar({ editor }: { readonly editor: CatlasEditor | null }) {
   return (
-    <header className="topbar" aria-label="Editor controls">
-      <div className="topbar__brand">
-        <span className="topbar__mark" aria-hidden="true">
+    <header
+      className="topbar flex items-center gap-[6px] bg-background border-b border-border px-2 relative z-20 min-w-0"
+      aria-label="Editor controls"
+    >
+      <div className="topbar__brand flex items-center gap-2 flex-[0_0_auto] min-w-0">
+        <span
+          className="topbar__mark inline-flex items-center justify-center bg-foreground text-background rounded-sm font-extrabold text-xs h-[26px] w-[26px]"
+          aria-hidden="true"
+        >
           C
         </span>
-        <span className="topbar__title">Catlas Editor</span>
+        <span className="topbar__title text-[13px] font-[650] whitespace-nowrap">
+          Catlas Editor
+        </span>
       </div>
-      <Separator className="topbar__separator" orientation="vertical" />
+      <Separator className="topbar__separator h-5 mx-[2px]" orientation="vertical" />
       {editor ? <TopBarContent editor={editor} /> : <TopBarLoading />}
     </header>
   );
@@ -74,7 +82,7 @@ export function EditorTopBar({ editor }: { readonly editor: CatlasEditor | null 
 
 function TopBarLoading() {
   return (
-    <div className="topbar__loading text-muted-foreground">
+    <div className="topbar__loading flex items-center gap-[6px] text-xs text-muted-foreground">
       <Spinner />
       <span>Starting editor</span>
     </div>
@@ -121,13 +129,20 @@ function TopBarContent({ editor }: { readonly editor: CatlasEditor }) {
         variant={snapshot.selection ? "ghost" : "secondary"}
       >
         <ListChecksIcon data-icon="inline-start" />
-        <span className="topbar__changes-label">Changes</span>
+        <span className="topbar__changes-label hidden min-[860px]:inline">Changes</span>
         <Badge variant="outline">{review.counts.total}</Badge>
       </Button>
 
-      <div className="topbar__spacer" />
-      <Badge className="topbar__status" variant={snapshot.dirty ? "secondary" : "outline"}>
-        {snapshot.loading ? <Spinner /> : <span className="status-dot" />}
+      <div className="topbar__spacer flex-1" />
+      <Badge
+        className="topbar__status whitespace-nowrap"
+        variant={snapshot.dirty ? "secondary" : "outline"}
+      >
+        {snapshot.loading ? (
+          <Spinner />
+        ) : (
+          <span className="status-dot bg-editor-success rounded-full h-[6px] w-[6px]" />
+        )}
         {snapshot.loading ? "Loading viewport" : snapshot.dirty ? "Unsaved changes" : "Up to date"}
       </Badge>
       <ThemeMenu />
@@ -177,7 +192,13 @@ function ThemeMenu() {
 }
 
 export function EditorToolRail({ editor }: { readonly editor: CatlasEditor | null }) {
-  if (!editor) return <nav className="tool-rail" aria-label="Editing tools" />;
+  if (!editor)
+    return (
+      <nav
+        className="tool-rail flex flex-col items-center gap-2 bg-background border-r border-border py-2 px-[7px] relative z-[12] min-h-0"
+        aria-label="Editing tools"
+      />
+    );
   return <ToolRailContent editor={editor} />;
 }
 
@@ -186,10 +207,13 @@ function ToolRailContent({ editor }: { readonly editor: CatlasEditor }) {
   const deleteOperation = editor.operation("delete");
 
   return (
-    <nav className="tool-rail" aria-label="Editing tools">
+    <nav
+      className="tool-rail flex flex-col items-center gap-2 bg-background border-r border-border py-2 px-[7px] relative z-[12] min-h-0"
+      aria-label="Editing tools"
+    >
       <ToggleGroup
         aria-label="Editor mode"
-        className="tool-rail__modes"
+        className="tool-rail__modes flex-col"
         onValueChange={(mode) => {
           if (mode) editor.setMode(mode as EditorMode);
         }}
@@ -201,7 +225,7 @@ function ToolRailContent({ editor }: { readonly editor: CatlasEditor }) {
         {MODE_BUTTONS.map(({ mode, label, shortcut, icon: Icon }) => (
           <Tooltip key={mode}>
             <TooltipTrigger asChild>
-              <span className="tool-rail__tooltip-trigger">
+              <span className="tool-rail__tooltip-trigger inline-flex">
                 <ToggleGroupItem aria-label={`${label} mode`} value={mode}>
                   <Icon />
                 </ToggleGroupItem>
@@ -209,7 +233,12 @@ function ToolRailContent({ editor }: { readonly editor: CatlasEditor }) {
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8}>
               <span>{label}</span>
-              <kbd data-slot="kbd">{shortcut}</kbd>
+              <kbd
+                className="rounded-[3px] font-mono text-[10px] leading-none opacity-70"
+                data-slot="kbd"
+              >
+                {shortcut}
+              </kbd>
             </TooltipContent>
           </Tooltip>
         ))}
@@ -219,7 +248,7 @@ function ToolRailContent({ editor }: { readonly editor: CatlasEditor }) {
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="tool-rail__tooltip-trigger">
+          <span className="tool-rail__tooltip-trigger inline-flex">
             <Button
               aria-label="Delete selected feature"
               disabled={!deleteOperation.available}
@@ -234,7 +263,12 @@ function ToolRailContent({ editor }: { readonly editor: CatlasEditor }) {
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={8}>
           <span>{deleteOperation.disabledReason ?? "Delete"}</span>
-          <kbd data-slot="kbd">⌫</kbd>
+          <kbd
+            className="rounded-[3px] font-mono text-[10px] leading-none opacity-70"
+            data-slot="kbd"
+          >
+            ⌫
+          </kbd>
         </TooltipContent>
       </Tooltip>
     </nav>
