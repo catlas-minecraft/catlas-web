@@ -27,6 +27,7 @@ function MapOverlayContent({ editor }: { readonly editor: CatlasEditor }) {
     <>
       <DraftControls editor={editor} snapshot={snapshot} />
       <StatusOverlay editor={editor} snapshot={snapshot} />
+      <EditorContextMenu snapshot={snapshot} />
       <div className="coordinate-hint">
         {snapshot.cursor
           ? `X ${formatCoordinate(snapshot.cursor.x)}  Z ${formatCoordinate(snapshot.cursor.z)}`
@@ -38,6 +39,27 @@ function MapOverlayContent({ editor }: { readonly editor: CatlasEditor }) {
 
 const formatCoordinate = (value: number) =>
   Number.isInteger(value) ? String(value) : value.toFixed(2);
+
+function EditorContextMenu({ snapshot }: { snapshot: EditorSnapshot }) {
+  const contextMenu = snapshot.contextMenu;
+  if (!contextMenu) return null;
+
+  return (
+    <div
+      aria-label="Editor context menu"
+      className="editor-context-menu"
+      style={{ left: contextMenu.x, top: contextMenu.y }}
+    >
+      {contextMenu.target === null ? (
+        <div className="editor-context-menu__title">Nothing here</div>
+      ) : null}
+      <div className="editor-context-menu__coords">
+        X {formatCoordinate(contextMenu.world.x)}&nbsp;&nbsp; Z{" "}
+        {formatCoordinate(contextMenu.world.z)}
+      </div>
+    </div>
+  );
+}
 
 function DraftControls({ editor, snapshot }: { editor: CatlasEditor; snapshot: EditorSnapshot }) {
   if (!snapshot.drawing) return null;

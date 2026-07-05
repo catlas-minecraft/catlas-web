@@ -5,6 +5,7 @@ import { entityKey } from "./types";
 import { worldToScreen } from "./util";
 
 type RendererOptions = {
+  readonly onEntityContextMenu: (event: MouseEvent, entity: EntityRef) => void;
   readonly onEntityPointerDown: (event: PointerEvent, entity: EntityRef) => void;
   readonly onMidpointPointerDown: (
     event: PointerEvent,
@@ -129,6 +130,9 @@ export class EntitySvgLayer {
       .on("pointerdown", (event: PointerEvent, way) =>
         this.#options.onEntityPointerDown(event, { type: "way", id: way.id }),
       )
+      .on("contextmenu", (event: MouseEvent, way) =>
+        this.#options.onEntityContextMenu(event, { type: "way", id: way.id }),
+      )
       .on("click", (event: MouseEvent) => event.stopPropagation());
 
     this.#nodes
@@ -165,6 +169,9 @@ export class EntitySvgLayer {
       .attr("r", (node) => (selectedKey === entityKey(node) ? 7 : 5))
       .on("pointerdown", (event: PointerEvent, node) =>
         this.#options.onEntityPointerDown(event, { type: "node", id: node.id }),
+      )
+      .on("contextmenu", (event: MouseEvent, node) =>
+        this.#options.onEntityContextMenu(event, { type: "node", id: node.id }),
       )
       .on("click", (event: MouseEvent) => event.stopPropagation());
 

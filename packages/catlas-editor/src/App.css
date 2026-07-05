@@ -658,6 +658,35 @@
   z-index: 8;
 }
 
+.editor-context-menu {
+  background: color-mix(in oklab, var(--popover) 98%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 30px color-mix(in oklab, var(--foreground) 16%, transparent);
+  color: var(--popover-foreground);
+  min-width: 116px;
+  padding: 7px 8px;
+  position: absolute;
+  transform: translate(2px, 2px);
+  user-select: none;
+  z-index: 18;
+}
+
+.editor-context-menu__title {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.editor-context-menu__coords {
+  color: var(--muted-foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
 .save-panel {
   width: min(360px, calc(100vw - 28px));
 }

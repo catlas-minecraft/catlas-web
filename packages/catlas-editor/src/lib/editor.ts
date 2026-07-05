@@ -26,6 +26,7 @@ import { TileCanvasLayer } from "./editor/tiles";
 import type {
   DrawingState,
   EditorAuthState,
+  EditorContextMenu,
   EditorMode,
   EditorSaveState,
   EditorSnapshot,
@@ -116,6 +117,7 @@ export class CatlasEditor {
     readonly current: Graph;
     readonly review: ChangesetReview;
   } | null = null;
+  #contextMenu: EditorContextMenu | null = null;
   #cursor: Point3D | null = null;
   #cursorFrame: number | null = null;
   #disposed = false;
@@ -152,6 +154,7 @@ export class CatlasEditor {
     root.append(overlay);
     this.#overlay = d3.select(overlay);
     this.#renderer = new EntitySvgLayer(overlay, {
+      onEntityContextMenu: (event, entity) => this.#handleEntityContextMenu(event, entity),
       onEntityPointerDown: (event, entity) => this.#handleEntityPointerDown(event, entity),
       onMidpointPointerDown: (event, wayId, insertionIndex, point) =>
         this.#handleMidpointPointerDown(event, wayId, insertionIndex, point),
@@ -179,6 +182,9 @@ export class CatlasEditor {
     this.#zoom.transform(this.#overlay, this.#transform);
     this.#overlay.on("dblclick.zoom", null);
     this.#overlay.on("click.editor", (event: MouseEvent) => this.#handleCanvasClick(event));
+    this.#overlay.on("contextmenu.editor", (event: MouseEvent) =>
+      this.#handleCanvasContextMenu(event),
+    );
     this.#overlay.on("dblclick.editor", (event: MouseEvent) => {
       event.preventDefault();
       if (this.#mode === "draw-line") this.finishDrawing();
@@ -262,8 +268,9 @@ export class CatlasEditor {
 
   setMode(mode: EditorMode) {
     const previewCleared = this.#clearChangePreview();
+    const contextMenuCleared = this.#clearContextMenu();
     if (mode === this.#mode) {
-      if (previewCleared) this.#emit();
+      if (previewCleared || contextMenuCleared) this.#emit();
       return;
     }
     this.#mode = mode;
@@ -429,6 +436,7 @@ export class CatlasEditor {
     const nodes = createdNodes.map(({ draftPoint: _draftPoint, ...node }) => node);
 
     if (this.#history.perform(addEntities([...nodes, way]), `Add ${preset.label}`)) {
+      this.#clearContextMenu();
       this.#selection = { type: "way", id: wayId };
       this.#mode = "browse";
       this.#drawing = null;
@@ -438,6 +446,7 @@ export class CatlasEditor {
 
   cancelDrawing() {
     if (!this.#drawing) return;
+    this.#clearContextMenu();
     this.#mode = "browse";
     this.#drawing = null;
     this.#emit();
@@ -525,6 +534,12 @@ export class CatlasEditor {
     return true;
   }
 
+  #clearContextMenu() {
+    if (!this.#contextMenu) return false;
+    this.#contextMenu = null;
+    return true;
+  }
+
   #updateSelection(properties: Parameters<typeof updateEntityProperties>[1], annotation: string) {
     if (!this.#selection) return;
     if (this.#history.perform(updateEntityProperties(this.#selection, properties), annotation)) {
@@ -533,38 +548,78 @@ export class CatlasEditor {
   }
 
   #handleCanvasClick(event: MouseEvent) {
+    const contextMenuCleared = this.#clearContextMenu();
     const point = this.#pointFromEvent(event);
     if (this.#mode === "add-point") {
       this.#createPoint(point);
+      if (contextMenuCleared) this.#emit();
       return;
     }
     if (this.#mode === "draw-line" || this.#mode === "draw-area") {
       this.#appendDraftVertex({ nodeId: null, point: this.#snapForMode(point) });
+      if (contextMenuCleared) this.#emit();
       return;
     }
     this.select(null);
+    if (contextMenuCleared) this.#emit();
+  }
+
+  #handleCanvasContextMenu(event: MouseEvent) {
+    event.preventDefault();
+    this.#openContextMenu(event, null);
+  }
+
+  #handleEntityContextMenu(event: MouseEvent, ref: EntityRef) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!this.#history.graph.has(ref)) return;
+    this.#openContextMenu(event, ref);
+  }
+
+  #openContextMenu(event: MouseEvent, target: EntityRef | null) {
+    const [x, y] = d3.pointer(event, this.#overlay.node());
+    this.#contextMenu = {
+      target,
+      world: this.#pointFromEvent(event),
+      x,
+      y,
+    };
+    this.#emit();
   }
 
   #handleEntityPointerDown(event: PointerEvent, ref: EntityRef) {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    const contextMenuCleared = this.#clearContextMenu();
     const entity = this.#history.graph.entity(ref);
-    if (!entity) return;
+    if (!entity) {
+      if (contextMenuCleared) this.#emit();
+      return;
+    }
 
     if ((this.#mode === "draw-line" || this.#mode === "draw-area") && entity.type === "node") {
       this.#appendDraftVertex({ nodeId: entity.id, point: entity.geom });
+      if (contextMenuCleared) this.#emit();
       return;
     }
 
     if (this.#mode === "add-point") {
       this.#mode = "browse";
       this.select(ref);
+      if (contextMenuCleared) this.#emit();
       return;
     }
 
-    if (this.#mode !== "browse") return;
+    if (this.#mode !== "browse") {
+      if (contextMenuCleared) this.#emit();
+      return;
+    }
     this.select(ref);
-    if (entity.type !== "node") return;
+    if (entity.type !== "node") {
+      if (contextMenuCleared) this.#emit();
+      return;
+    }
 
     const captureTarget = event.currentTarget as Element;
     this.#activeDrag = {
@@ -575,6 +630,7 @@ export class CatlasEditor {
       current: entity.geom,
     };
     captureTarget.setPointerCapture(event.pointerId);
+    if (contextMenuCleared) this.#emit();
   }
 
   #handleMidpointPointerDown(
@@ -583,11 +639,19 @@ export class CatlasEditor {
     insertionIndex: number,
     point: Point3D,
   ) {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    if (this.#mode !== "browse") return;
+    const contextMenuCleared = this.#clearContextMenu();
+    if (this.#mode !== "browse") {
+      if (contextMenuCleared) this.#emit();
+      return;
+    }
     const way = this.#history.graph.way(wayId);
-    if (!way) return;
+    if (!way) {
+      if (contextMenuCleared) this.#emit();
+      return;
+    }
     const preset = presetForFeature(this.#presets, way.geometryKind, way.featureType);
     const snapped = snapPoint(
       point,
@@ -604,6 +668,8 @@ export class CatlasEditor {
     };
     if (this.#history.perform(insertNodeIntoWay(wayId, insertionIndex, node), "Insert vertex")) {
       this.#selection = { type: "node", id: nodeId };
+      this.#emit();
+    } else if (contextMenuCleared) {
       this.#emit();
     }
   }
@@ -678,6 +744,11 @@ export class CatlasEditor {
       return;
     }
     if (event.key === "Escape") {
+      if (this.#clearContextMenu()) {
+        event.preventDefault();
+        this.#emit();
+        return;
+      }
       this.cancelDrawing();
       this.setMode("browse");
       return;
@@ -742,6 +813,7 @@ export class CatlasEditor {
       geom: snapPoint(point, preset.snapPolicy),
     };
     if (this.#history.perform(addEntities([node]), `Add ${preset.label}`)) {
+      this.#clearContextMenu();
       this.#selection = { type: "node", id };
       this.#mode = "browse";
       this.#emit();
@@ -820,6 +892,7 @@ export class CatlasEditor {
       loading: this.#loading,
       loadError: this.#loadError,
       drawing: this.#drawing,
+      contextMenu: this.#contextMenu,
       issues: validateGraph(this.#history.graph),
       save: this.#saveState,
       auth: this.#authState,
@@ -898,6 +971,7 @@ export type { Operation, OperationId } from "./editor/operations";
 export type { ChangesetReview } from "./editor/changeset";
 export type {
   EditorAuthState,
+  EditorContextMenu,
   EditorMode,
   EditorSnapshot,
   EntityRef,

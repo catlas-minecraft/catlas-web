@@ -16,6 +16,13 @@ export type Point3D = {
   readonly z: number;
 };
 
+export type EditorContextMenu = {
+  readonly target: EntityRef | null;
+  readonly world: Point3D;
+  readonly x: number;
+  readonly y: number;
+};
+
 export type NodeEntity = {
   readonly type: "node";
   readonly id: number;
@@ -80,6 +87,7 @@ export type EditorSnapshot = {
   readonly loading: boolean;
   readonly loadError: string | null;
   readonly drawing: DrawingState | null;
+  readonly contextMenu: EditorContextMenu | null;
   readonly issues: readonly ValidationIssue[];
   readonly save: EditorSaveState;
   readonly auth: EditorAuthState;
