@@ -129,6 +129,20 @@ describe("editor actions", () => {
       getOperation("join", graph, { type: "way", id: 10 }, { type: "way", id: 13 }).disabledReason,
     ).toBe("Lines must share exactly one endpoint.");
   });
+
+  test("delete operation can target the right-clicked entity", () => {
+    const graph = new Graph([node(1), node(2), node(3), line(10, [1, 2]), line(11, [2, 3])]);
+    const operation = getOperation(
+      "delete",
+      graph,
+      { type: "way", id: 10 },
+      { type: "way", id: 11 },
+    );
+
+    expect(operation.available).toBe(true);
+    expect(operation.action?.(graph).way(10)).toBeDefined();
+    expect(operation.action?.(graph).way(11)).toBeUndefined();
+  });
 });
 
 describe("validation", () => {

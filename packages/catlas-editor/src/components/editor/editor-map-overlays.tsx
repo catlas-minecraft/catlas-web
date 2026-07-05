@@ -4,13 +4,16 @@ import {
   GitMergeIcon,
   PencilLineIcon,
   RotateCwIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Spinner } from "@/components/ui/spinner";
 import type { CatlasEditor, EditorSnapshot } from "@/lib/editor";
+import { entityKey } from "@/lib/editor/types";
 import { useEditorSnapshot } from "./use-editor-snapshot";
+import { Separator } from "../ui/separator";
 
 export function EditorMapOverlays({ editor }: { readonly editor: CatlasEditor | null }) {
   if (!editor) {
@@ -56,8 +59,17 @@ function EditorContextMenu({
   const contextMenu = snapshot.contextMenu;
   if (!contextMenu) return null;
 
+  const targetEntity = contextMenu.targetEntity;
+  const deleteOperation = contextMenu.target
+    ? editor.operation("delete", contextMenu.target)
+    : null;
   const joinOperation =
-    contextMenu.target?.type === "way" ? editor.operation("join", contextMenu.target) : null;
+    targetEntity?.type === "way" &&
+    targetEntity.geometryKind === "line" &&
+    snapshot.selectedEntity?.type === "way" &&
+    snapshot.selectedEntity.geometryKind === "line"
+      ? editor.operation("join", contextMenu.target)
+      : null;
 
   return (
     <div
@@ -65,6 +77,18 @@ function EditorContextMenu({
       className="editor-context-menu"
       style={{ left: contextMenu.x, top: contextMenu.y }}
     >
+      {targetEntity ? (
+        <div className="editor-context-menu__target">
+          <div className="editor-context-menu__title">{formatEntityKind(targetEntity)}</div>
+          <div className="editor-context-menu__meta">
+            <code>{entityKey(targetEntity)}</code>
+            <span>{targetEntity.featureType || "Untyped feature"}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="editor-context-menu__title">Nothing here</div>
+      )}
+      <Separator />
       {joinOperation ? (
         <Button
           className="editor-context-menu__item"
@@ -79,9 +103,21 @@ function EditorContextMenu({
           {joinOperation.label}
         </Button>
       ) : null}
-      {contextMenu.target === null ? (
-        <div className="editor-context-menu__title">Nothing here</div>
+      {deleteOperation ? (
+        <Button
+          className="editor-context-menu__item "
+          disabled={!deleteOperation.available}
+          onClick={deleteOperation.execute}
+          size="sm"
+          title={deleteOperation.disabledReason ?? deleteOperation.label}
+          type="button"
+          variant="destructive"
+        >
+          <Trash2Icon data-icon="inline-start" />
+          {deleteOperation.label}
+        </Button>
       ) : null}
+      <Separator />
       <div className="editor-context-menu__coords">
         X {formatCoordinate(contextMenu.world.x)}&nbsp;&nbsp; Z{" "}
         {formatCoordinate(contextMenu.world.z)}
@@ -89,6 +125,12 @@ function EditorContextMenu({
     </div>
   );
 }
+
+const formatEntityKind = (entity: NonNullable<EditorSnapshot["contextMenu"]>["targetEntity"]) => {
+  if (!entity) return "Feature";
+  if (entity.type === "node") return "Node";
+  return entity.geometryKind === "line" ? "Line" : "Area";
+};
 
 function DraftControls({ editor, snapshot }: { editor: CatlasEditor; snapshot: EditorSnapshot }) {
   if (!snapshot.drawing) return null;

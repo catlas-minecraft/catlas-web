@@ -26,14 +26,15 @@ export const getOperation = (
   target: EntityRef | null = null,
 ): OperationDefinition => {
   if (id === "delete") {
-    const available = selection !== null && graph.has(selection);
+    const deleteTarget = target ?? selection;
+    const available = deleteTarget !== null && graph.has(deleteTarget);
     return {
       id,
       label: "Delete",
       available,
       disabledReason: available ? null : "Select a feature to delete it.",
       annotation: "Delete feature",
-      action: available && selection ? deleteEntity(selection) : null,
+      action: available && deleteTarget ? deleteEntity(deleteTarget) : null,
       selection: null,
     };
   }

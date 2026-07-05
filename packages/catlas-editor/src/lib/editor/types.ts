@@ -18,6 +18,7 @@ export type Point3D = {
 
 export type EditorContextMenu = {
   readonly target: EntityRef | null;
+  readonly targetEntity: EditorEntity | null;
   readonly world: Point3D;
   readonly x: number;
   readonly y: number;

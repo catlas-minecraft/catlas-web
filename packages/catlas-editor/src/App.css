@@ -675,14 +675,41 @@
 .editor-context-menu__item {
   height: 28px;
   justify-content: flex-start;
+  margin-top: 4px;
   padding: 0 6px;
   width: 100%;
+}
+
+.editor-context-menu__target {
+  margin-bottom: 2px;
+  min-width: 0;
 }
 
 .editor-context-menu__title {
   font-size: 12px;
   font-weight: 650;
   line-height: 1.25;
+}
+
+.editor-context-menu__meta {
+  align-items: center;
+  color: var(--muted-foreground);
+  display: flex;
+  font-size: 10px;
+  gap: 5px;
+  line-height: 1.35;
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.editor-context-menu__meta code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.editor-context-menu__meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .editor-context-menu__coords {

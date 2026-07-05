@@ -586,6 +586,7 @@ export class CatlasEditor {
     const [x, y] = d3.pointer(event, this.#overlay.node());
     this.#contextMenu = {
       target,
+      targetEntity: target ? (this.#history.graph.entity(target) ?? null) : null,
       world: this.#pointFromEvent(event),
       x,
       y,
