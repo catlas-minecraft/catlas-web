@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Graph } from "../src/lib/graph";
-import { deleteEntity, insertNodeIntoWay } from "../src/lib/editor/actions";
+import { deleteEntity, insertNodeIntoWay, joinWays } from "../src/lib/editor/actions";
+import { getOperation } from "../src/lib/editor/operations";
 import { validateGraph } from "../src/lib/editor/validation";
 import { area, line, node } from "./helpers";
 
@@ -38,6 +39,95 @@ describe("editor actions", () => {
     expect(next.way(-1)).toBeUndefined();
     expect(next.node(-1)).toBeUndefined();
     expect(next.node(-2)).toBeUndefined();
+  });
+
+  const joinCases = [
+    { name: "end to start", keep: [1, 2], merge: [2, 3], expected: [1, 2, 3] },
+    { name: "start to end", keep: [2, 3], merge: [1, 2], expected: [1, 2, 3] },
+    { name: "start to start", keep: [2, 3], merge: [2, 1], expected: [1, 2, 3] },
+    { name: "end to end", keep: [1, 2], merge: [3, 2], expected: [1, 2, 3] },
+  ] as const;
+
+  for (const joinCase of joinCases) {
+    test(`joining lines handles ${joinCase.name}`, () => {
+      const graph = new Graph([
+        node(1),
+        node(2),
+        node(3),
+        { ...line(10, joinCase.keep), featureType: "primary-route", tags: { name: "Keep" } },
+        line(11, joinCase.merge),
+      ]);
+      const next = joinWays(10, 11)(graph);
+
+      expect(next.way(10)?.nodeIds).toEqual(joinCase.expected);
+      expect(next.way(10)?.featureType).toBe("primary-route");
+      expect(next.way(10)?.tags).toEqual({ name: "Keep" });
+      expect(next.way(11)).toBeUndefined();
+    });
+  }
+
+  test("joining leaves invalid line combinations unchanged", () => {
+    const sameWayGraph = new Graph([node(1), node(2), line(10, [1, 2])]);
+    const disconnectedGraph = new Graph([
+      node(1),
+      node(2),
+      node(3),
+      node(4),
+      line(10, [1, 2]),
+      line(11, [3, 4]),
+    ]);
+    const duplicateEndpointGraph = new Graph([
+      node(1),
+      node(2),
+      line(10, [1, 2]),
+      line(11, [2, 1]),
+    ]);
+    const areaGraph = new Graph([
+      node(1),
+      node(2),
+      node(3),
+      line(10, [1, 2]),
+      area(11, [2, 3, 1, 2]),
+    ]);
+
+    expect(joinWays(10, 10)(sameWayGraph)).toBe(sameWayGraph);
+    expect(joinWays(10, 11)(disconnectedGraph)).toBe(disconnectedGraph);
+    expect(joinWays(10, 11)(duplicateEndpointGraph)).toBe(duplicateEndpointGraph);
+    expect(joinWays(10, 11)(areaGraph)).toBe(areaGraph);
+  });
+
+  test("join operation is available only for selected line plus target line endpoint joins", () => {
+    const graph = new Graph([
+      node(1),
+      node(2),
+      node(3),
+      node(4),
+      line(10, [1, 2]),
+      line(11, [2, 3]),
+      line(12, [3, 4]),
+      line(13, [2, 1]),
+      area(20, [1, 2, 3, 1]),
+    ]);
+
+    expect(
+      getOperation("join", graph, { type: "way", id: 10 }, { type: "way", id: 11 }).available,
+    ).toBe(true);
+    expect(getOperation("join", graph, null, { type: "way", id: 11 }).available).toBe(false);
+    expect(
+      getOperation("join", graph, { type: "way", id: 10 }, { type: "way", id: 10 }).disabledReason,
+    ).toBe("Choose another line to join.");
+    expect(
+      getOperation("join", graph, { type: "way", id: 20 }, { type: "way", id: 11 }).disabledReason,
+    ).toBe("Only lines can be joined.");
+    expect(
+      getOperation("join", graph, { type: "way", id: 10 }, { type: "way", id: 20 }).disabledReason,
+    ).toBe("Only lines can be joined.");
+    expect(
+      getOperation("join", graph, { type: "way", id: 10 }, { type: "way", id: 12 }).disabledReason,
+    ).toBe("Lines must share exactly one endpoint.");
+    expect(
+      getOperation("join", graph, { type: "way", id: 10 }, { type: "way", id: 13 }).disabledReason,
+    ).toBe("Lines must share exactly one endpoint.");
   });
 });
 

@@ -248,8 +248,8 @@ export class CatlasEditor {
     this.#emit();
   }
 
-  operation(id: OperationId): Operation {
-    const operation = getOperation(id, this.#history.graph, this.#selection);
+  operation(id: OperationId, target: EntityRef | null = null): Operation {
+    const operation = getOperation(id, this.#history.graph, this.#selection, target);
     return {
       id: operation.id,
       label: operation.label,
@@ -257,9 +257,15 @@ export class CatlasEditor {
       disabledReason: operation.disabledReason,
       execute: () => {
         if (!operation.action) return;
+        const contextMenuCleared = this.#clearContextMenu();
         this.#changePreview = null;
         if (this.#history.perform(operation.action, operation.annotation)) {
-          this.#selection = null;
+          this.#selection =
+            operation.selection && this.#history.graph.has(operation.selection)
+              ? operation.selection
+              : null;
+          this.#emit();
+        } else if (contextMenuCleared) {
           this.#emit();
         }
       },

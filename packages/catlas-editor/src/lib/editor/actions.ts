@@ -85,6 +85,50 @@ export const deleteEntity =
     return nextGraph.remove(ref);
   };
 
+export const joinedLineNodeIds = (
+  keepWay: WayEntity,
+  mergeWay: WayEntity,
+): readonly number[] | null => {
+  if (keepWay.id === mergeWay.id) return null;
+  if (keepWay.geometryKind !== "line" || mergeWay.geometryKind !== "line") return null;
+
+  const keepStart = keepWay.nodeIds[0];
+  const keepEnd = keepWay.nodeIds.at(-1);
+  const mergeStart = mergeWay.nodeIds[0];
+  const mergeEnd = mergeWay.nodeIds.at(-1);
+  if (
+    keepStart === undefined ||
+    keepEnd === undefined ||
+    mergeStart === undefined ||
+    mergeEnd === undefined
+  ) {
+    return null;
+  }
+
+  const reversedMergeNodeIds = mergeWay.nodeIds.toReversed();
+  const candidates = [
+    keepEnd === mergeStart ? [...keepWay.nodeIds, ...mergeWay.nodeIds.slice(1)] : null,
+    keepStart === mergeEnd ? [...mergeWay.nodeIds.slice(0, -1), ...keepWay.nodeIds] : null,
+    keepStart === mergeStart ? [...reversedMergeNodeIds.slice(0, -1), ...keepWay.nodeIds] : null,
+    keepEnd === mergeEnd ? [...keepWay.nodeIds, ...reversedMergeNodeIds.slice(1)] : null,
+  ].filter((nodeIds): nodeIds is number[] => nodeIds !== null);
+
+  return candidates.length === 1 ? candidates[0] : null;
+};
+
+export const joinWays =
+  (keepWayId: number, mergeWayId: number): GraphAction =>
+  (graph) => {
+    const keepWay = graph.way(keepWayId);
+    const mergeWay = graph.way(mergeWayId);
+    if (!keepWay || !mergeWay) return graph;
+
+    const nodeIds = joinedLineNodeIds(keepWay, mergeWay);
+    if (!nodeIds) return graph;
+
+    return graph.replace({ ...keepWay, nodeIds }).remove({ type: "way", id: mergeWayId });
+  };
+
 export const insertNodeIntoWay =
   (wayId: number, index: number, node: NodeEntity): GraphAction =>
   (graph) => {

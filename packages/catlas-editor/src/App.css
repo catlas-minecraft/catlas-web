@@ -672,6 +672,13 @@
   z-index: 18;
 }
 
+.editor-context-menu__item {
+  height: 28px;
+  justify-content: flex-start;
+  padding: 0 6px;
+  width: 100%;
+}
+
 .editor-context-menu__title {
   font-size: 12px;
   font-weight: 650;

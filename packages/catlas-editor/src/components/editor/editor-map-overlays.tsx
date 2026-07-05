@@ -1,4 +1,10 @@
-import { AlertCircleIcon, CheckCircle2Icon, PencilLineIcon, RotateCwIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  CheckCircle2Icon,
+  GitMergeIcon,
+  PencilLineIcon,
+  RotateCwIcon,
+} from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -27,7 +33,7 @@ function MapOverlayContent({ editor }: { readonly editor: CatlasEditor }) {
     <>
       <DraftControls editor={editor} snapshot={snapshot} />
       <StatusOverlay editor={editor} snapshot={snapshot} />
-      <EditorContextMenu snapshot={snapshot} />
+      <EditorContextMenu editor={editor} snapshot={snapshot} />
       <div className="coordinate-hint">
         {snapshot.cursor
           ? `X ${formatCoordinate(snapshot.cursor.x)}  Z ${formatCoordinate(snapshot.cursor.z)}`
@@ -40,9 +46,18 @@ function MapOverlayContent({ editor }: { readonly editor: CatlasEditor }) {
 const formatCoordinate = (value: number) =>
   Number.isInteger(value) ? String(value) : value.toFixed(2);
 
-function EditorContextMenu({ snapshot }: { snapshot: EditorSnapshot }) {
+function EditorContextMenu({
+  editor,
+  snapshot,
+}: {
+  editor: CatlasEditor;
+  snapshot: EditorSnapshot;
+}) {
   const contextMenu = snapshot.contextMenu;
   if (!contextMenu) return null;
+
+  const joinOperation =
+    contextMenu.target?.type === "way" ? editor.operation("join", contextMenu.target) : null;
 
   return (
     <div
@@ -50,6 +65,20 @@ function EditorContextMenu({ snapshot }: { snapshot: EditorSnapshot }) {
       className="editor-context-menu"
       style={{ left: contextMenu.x, top: contextMenu.y }}
     >
+      {joinOperation ? (
+        <Button
+          className="editor-context-menu__item"
+          disabled={!joinOperation.available}
+          onClick={joinOperation.execute}
+          size="sm"
+          title={joinOperation.disabledReason ?? joinOperation.label}
+          type="button"
+          variant="ghost"
+        >
+          <GitMergeIcon data-icon="inline-start" />
+          {joinOperation.label}
+        </Button>
+      ) : null}
       {contextMenu.target === null ? (
         <div className="editor-context-menu__title">Nothing here</div>
       ) : null}
