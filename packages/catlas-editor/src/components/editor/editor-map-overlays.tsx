@@ -17,7 +17,8 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { Spinner } from "@/components/ui/spinner";
-import type { CatlasEditor, EditorSnapshot } from "@/lib/editor";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { CatlasEditor, EditorSnapshot, Operation } from "@/lib/editor";
 import { entityKey } from "@/lib/editor/types";
 import { useEditorSnapshot } from "./use-editor-snapshot";
 
@@ -72,12 +73,7 @@ function EditorContextMenu({
     ? editor.operation("delete", contextMenu.target)
     : null;
   const joinOperation =
-    targetEntity?.type === "way" &&
-    targetEntity.geometryKind === "line" &&
-    snapshot.selectedEntity?.type === "way" &&
-    snapshot.selectedEntity.geometryKind === "line"
-      ? editor.operation("join", contextMenu.target)
-      : null;
+    targetEntity?.type === "way" ? editor.operation("join", contextMenu.target) : null;
 
   return (
     <ContextMenuContent aria-label="Editor context menu" className="editor-context-menu min-w-44">
@@ -101,17 +97,7 @@ function EditorContextMenu({
         <>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            {joinOperation ? (
-              <ContextMenuItem
-                className="editor-context-menu__item"
-                disabled={!joinOperation.available}
-                onSelect={() => joinOperation.execute()}
-                title={joinOperation.disabledReason ?? joinOperation.label}
-              >
-                <GitMergeIcon />
-                {joinOperation.label}
-              </ContextMenuItem>
-            ) : null}
+            {joinOperation ? <JoinContextMenuItem operation={joinOperation} /> : null}
             {deleteOperation ? (
               <ContextMenuItem
                 className="editor-context-menu__item"
@@ -133,6 +119,33 @@ function EditorContextMenu({
         {formatCoordinate(contextMenu.world.z)}
       </ContextMenuLabel>
     </ContextMenuContent>
+  );
+}
+
+function JoinContextMenuItem({ operation }: { readonly operation: Operation }) {
+  const item = (
+    <ContextMenuItem
+      className="editor-context-menu__item"
+      disabled={!operation.available}
+      onSelect={() => operation.execute()}
+      title={operation.disabledReason ?? operation.label}
+    >
+      <GitMergeIcon />
+      {operation.label}
+    </ContextMenuItem>
+  );
+
+  if (operation.available || !operation.disabledReason) return item;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="block">{item}</span>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        {operation.disabledReason}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
