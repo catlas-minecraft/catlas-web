@@ -79,6 +79,7 @@ export const visibleNodesForSelection = (
 
 export class EntitySvgLayer {
   readonly #root: d3.Selection<SVGSVGElement, unknown, null, undefined>;
+  readonly #defs: d3.Selection<SVGDefsElement, unknown, null, undefined>;
   readonly #areas: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #lines: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #hitAreas: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -86,10 +87,12 @@ export class EntitySvgLayer {
   readonly #midpoints: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #preview: d3.Selection<SVGGElement, unknown, null, undefined>;
   readonly #draft: d3.Selection<SVGGElement, unknown, null, undefined>;
+  readonly #areaHitClipPrefix: string;
   readonly #options: RendererOptions;
 
   constructor(svg: SVGSVGElement, options: RendererOptions) {
     this.#root = d3.select(svg);
+    this.#defs = this.#root.append("defs");
     this.#areas = this.#root.append("g").attr("class", "entity-layer entity-layer--areas");
     this.#lines = this.#root.append("g").attr("class", "entity-layer entity-layer--lines");
     this.#hitAreas = this.#root.append("g").attr("class", "entity-layer entity-layer--hits");
@@ -97,6 +100,7 @@ export class EntitySvgLayer {
     this.#midpoints = this.#root.append("g").attr("class", "entity-layer entity-layer--midpoints");
     this.#preview = this.#root.append("g").attr("class", "entity-layer entity-layer--preview");
     this.#draft = this.#root.append("g").attr("class", "entity-layer entity-layer--draft");
+    this.#areaHitClipPrefix = `entity-area-hit-clip-${crypto.randomUUID()}`;
     this.#options = options;
   }
 
@@ -120,13 +124,34 @@ export class EntitySvgLayer {
       .attr("class", (way) => `entity-line${selectedKey === entityKey(way) ? " is-selected" : ""}`)
       .attr("d", (way) => pathForWay(graph, way, transform, transientNode));
 
+    const areaHitClips = this.#defs
+      .selectAll<SVGClipPathElement, WayEntity>("clipPath.entity-area-hit-clip")
+      .data(areas, (way) => way.id)
+      .join("clipPath")
+      .attr("class", "entity-area-hit-clip")
+      .attr("clipPathUnits", "userSpaceOnUse")
+      .attr("id", (way) => this.#areaHitClipId(way));
+
+    areaHitClips
+      .selectAll<SVGPathElement, WayEntity>("path")
+      .data((way) => [way])
+      .join("path")
+      .attr("d", (way) => pathForWay(graph, way, transform, transientNode));
+
     this.#hitAreas
       .selectAll<SVGPathElement, WayEntity>("path.entity-hit")
       .data([...areas, ...lines], (way) => way.id)
       .join("path")
-      .attr("class", (way) => `entity-hit entity-hit--${way.geometryKind}`)
+      .attr(
+        "class",
+        (way) =>
+          `entity-hit entity-hit--${way.geometryKind}${selectedKey === entityKey(way) ? " is-selected" : ""}`,
+      )
       .attr("data-interactive", "true")
       .attr("d", (way) => pathForWay(graph, way, transform, transientNode))
+      .attr("clip-path", (way) =>
+        way.geometryKind === "area" ? `url(#${this.#areaHitClipId(way)})` : null,
+      )
       .on("pointerdown", (event: PointerEvent, way) =>
         this.#options.onEntityPointerDown(event, { type: "way", id: way.id }),
       )
@@ -261,5 +286,9 @@ export class EntitySvgLayer {
 
   destroy() {
     this.#root.selectAll("*").remove();
+  }
+
+  #areaHitClipId(way: WayEntity) {
+    return `${this.#areaHitClipPrefix}-${way.id}`;
   }
 }

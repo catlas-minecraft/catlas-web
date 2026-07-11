@@ -53,14 +53,14 @@
 }
 
 .entity-area {
-  fill: rgba(63, 134, 89, 0.24);
+  fill: none;
   stroke: #2f7048;
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
 
 .entity-area.is-selected {
-  fill: var(--editor-selection-soft);
+  fill: none;
   stroke: var(--editor-selection);
   stroke-width: 3;
 }
@@ -91,8 +91,14 @@
 }
 
 .entity-hit--area {
-  fill: transparent;
-  pointer-events: all;
+  fill: none;
+  pointer-events: stroke;
+  stroke: rgba(63, 134, 89, 0.24);
+  stroke-width: 45;
+}
+
+.entity-hit--area.is-selected {
+  stroke: var(--editor-selection-soft);
 }
 
 .entity-node {
