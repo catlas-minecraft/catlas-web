@@ -61,12 +61,12 @@ const THEME_OPTIONS: readonly {
 export function EditorTopBar({ editor }: { readonly editor: CatlasEditor | null }) {
   return (
     <header
-      className="topbar flex items-center gap-[6px] bg-background border-b border-border px-2 relative z-20 min-w-0"
+      className="topbar flex items-center gap-1.5 bg-background border-b border-border px-2 relative z-20 min-w-0"
       aria-label="Editor controls"
     >
       <div className="topbar__brand flex items-center gap-2 flex-[0_0_auto] min-w-0">
         <span
-          className="topbar__mark inline-flex items-center justify-center bg-foreground text-background rounded-sm font-extrabold text-xs h-[26px] w-[26px]"
+          className="topbar__mark inline-flex items-center justify-center bg-foreground text-background rounded-sm font-extrabold text-xs h-6.5 w-6.5"
           aria-hidden="true"
         >
           C
@@ -75,7 +75,7 @@ export function EditorTopBar({ editor }: { readonly editor: CatlasEditor | null 
           Catlas Editor
         </span>
       </div>
-      <Separator className="topbar__separator h-5 mx-[2px]" orientation="vertical" />
+      <Separator className="topbar__separator h-5 mx-0.5" orientation="vertical" />
       {editor ? <TopBarContent editor={editor} /> : <TopBarLoading />}
     </header>
   );
@@ -83,7 +83,7 @@ export function EditorTopBar({ editor }: { readonly editor: CatlasEditor | null 
 
 function TopBarLoading() {
   return (
-    <div className="topbar__loading flex items-center gap-[6px] text-xs text-muted-foreground">
+    <div className="topbar__loading flex items-center gap-1.5 text-xs text-muted-foreground">
       <Spinner />
       <span>Starting editor</span>
     </div>
@@ -142,7 +142,7 @@ function TopBarContent({ editor }: { readonly editor: CatlasEditor }) {
         {snapshot.loading ? (
           <Spinner />
         ) : (
-          <span className="status-dot bg-editor-success rounded-full h-[6px] w-[6px]" />
+          <span className="status-dot bg-editor-success rounded-full h-1.5 w-1.5" />
         )}
         {snapshot.loading ? "Loading viewport" : snapshot.dirty ? "Unsaved changes" : "Up to date"}
       </Badge>
@@ -204,7 +204,7 @@ export function EditorToolRail({
   if (!editor)
     return (
       <nav
-        className="tool-rail flex flex-col items-center gap-2 bg-background border-r border-border py-2 px-[7px] relative z-[12] min-h-0"
+        className="tool-rail flex flex-col items-center gap-2 bg-background border-r border-border py-2 px-1.75 relative z-12 min-h-0"
         aria-label="Editing tools"
       />
     );
@@ -231,7 +231,7 @@ function ToolRailContent({
 
   return (
     <nav
-      className="tool-rail flex flex-col items-center gap-2 bg-background border-r border-border py-2 px-[7px] relative z-[12] min-h-0"
+      className="tool-rail flex flex-col items-center gap-2 bg-background border-r border-border py-2 px-1.75 relative z-12 min-h-0"
       aria-label="Editing tools"
     >
       <ToggleGroup
