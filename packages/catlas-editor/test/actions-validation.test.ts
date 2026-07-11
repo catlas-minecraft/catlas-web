@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Graph } from "../src/lib/graph";
-import { deleteEntity, insertNodeIntoWay, joinWays } from "../src/lib/editor/actions";
+import {
+  deleteEntity,
+  insertNodeIntoWay,
+  joinWays,
+  splitWayAtNode,
+} from "../src/lib/editor/actions";
 import { getOperation } from "../src/lib/editor/operations";
 import { validateGraph } from "../src/lib/editor/validation";
 import { area, line, node } from "./helpers";
@@ -96,6 +101,38 @@ describe("editor actions", () => {
     expect(joinWays(10, 11)(areaGraph)).toBe(areaGraph);
   });
 
+  test("splitting a line keeps the first segment and creates a matching local way", () => {
+    const graph = new Graph([
+      node(1),
+      node(2),
+      node(3),
+      node(4),
+      { ...line(10, [1, 2, 3, 4]), featureType: "primary-route", tags: { name: "Main" } },
+    ]);
+    const next = splitWayAtNode(10, 3, -1)(graph);
+
+    expect(next.way(10)?.nodeIds).toEqual([1, 2, 3]);
+    expect(next.way(-1)).toMatchObject({
+      version: 0,
+      featureType: "primary-route",
+      tags: { name: "Main" },
+      geometryKind: "line",
+      nodeIds: [3, 4],
+    });
+  });
+
+  test("splitting leaves invalid targets unchanged", () => {
+    const lineGraph = new Graph([node(1), node(2), node(3), line(-1, [1, 3]), line(10, [1, 2, 3])]);
+    const duplicateNodeGraph = new Graph([node(1), node(2), node(3), line(10, [1, 2, 3, 2, 1])]);
+    const areaGraph = new Graph([node(1), node(2), node(3), area(10, [1, 2, 3, 1])]);
+
+    expect(splitWayAtNode(10, 1, -2)(lineGraph)).toBe(lineGraph);
+    expect(splitWayAtNode(10, 4, -2)(lineGraph)).toBe(lineGraph);
+    expect(splitWayAtNode(10, 2, -1)(lineGraph)).toBe(lineGraph);
+    expect(splitWayAtNode(10, 2, -1)(duplicateNodeGraph)).toBe(duplicateNodeGraph);
+    expect(splitWayAtNode(10, 2, -1)(areaGraph)).toBe(areaGraph);
+  });
+
   test("join operation is available only for selected line plus target line endpoint joins", () => {
     const graph = new Graph([
       node(1),
@@ -128,6 +165,37 @@ describe("editor actions", () => {
     expect(
       getOperation("join", graph, { type: "way", id: 10 }, { type: "way", id: 13 }).disabledReason,
     ).toBe("Lines must share exactly one endpoint.");
+  });
+
+  test("split operation is available only for an internal vertex of the selected line", () => {
+    const graph = new Graph([
+      node(1),
+      node(2),
+      node(3),
+      node(4),
+      line(10, [1, 2, 3]),
+      area(20, [1, 2, 3, 1]),
+    ]);
+
+    const operation = getOperation(
+      "split",
+      graph,
+      { type: "way", id: 10 },
+      { type: "node", id: 2 },
+      -1,
+    );
+    expect(operation.available).toBe(true);
+    expect(operation.action?.(graph).way(10)?.nodeIds).toEqual([1, 2]);
+    expect(operation.action?.(graph).way(-1)?.nodeIds).toEqual([2, 3]);
+    expect(
+      getOperation("split", graph, { type: "way", id: 10 }, { type: "node", id: 1 }).disabledReason,
+    ).toBe("Endpoints cannot split a line.");
+    expect(
+      getOperation("split", graph, { type: "way", id: 10 }, { type: "node", id: 4 }).disabledReason,
+    ).toBe("The vertex must belong to the selected line.");
+    expect(
+      getOperation("split", graph, { type: "way", id: 20 }, { type: "node", id: 2 }).disabledReason,
+    ).toBe("Only lines can be split.");
   });
 
   test("delete operation can target the right-clicked entity", () => {

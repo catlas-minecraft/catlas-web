@@ -129,6 +129,38 @@ export const joinWays =
     return graph.replace({ ...keepWay, nodeIds }).remove({ type: "way", id: mergeWayId });
   };
 
+export const splitLineNodeIds = (
+  way: WayEntity,
+  nodeId: number,
+): readonly [readonly number[], readonly number[]] | null => {
+  if (way.geometryKind !== "line") return null;
+
+  const splitIndices = way.nodeIds.flatMap((candidateId, index) =>
+    candidateId === nodeId ? [index] : [],
+  );
+  if (splitIndices.length !== 1) return null;
+
+  const splitIndex = splitIndices[0]!;
+  if (splitIndex === 0 || splitIndex === way.nodeIds.length - 1) return null;
+
+  return [way.nodeIds.slice(0, splitIndex + 1), way.nodeIds.slice(splitIndex)];
+};
+
+export const splitWayAtNode =
+  (wayId: number, nodeId: number, newWayId: number): GraphAction =>
+  (graph) => {
+    const way = graph.way(wayId);
+    if (!way || graph.has({ type: "way", id: newWayId })) return graph;
+
+    const splitNodeIds = splitLineNodeIds(way, nodeId);
+    if (!splitNodeIds) return graph;
+
+    const [keptNodeIds, newNodeIds] = splitNodeIds;
+    return graph
+      .replace({ ...way, nodeIds: keptNodeIds })
+      .replace({ ...way, id: newWayId, version: 0, nodeIds: newNodeIds });
+  };
+
 export const insertNodeIntoWay =
   (wayId: number, index: number, node: NodeEntity): GraphAction =>
   (graph) => {

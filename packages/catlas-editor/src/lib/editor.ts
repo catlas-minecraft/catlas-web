@@ -261,7 +261,13 @@ export class CatlasEditor {
   }
 
   operation(id: OperationId, target: EntityRef | null = null): Operation {
-    const operation = getOperation(id, this.#history.graph, this.#selection, target);
+    const operation = getOperation(
+      id,
+      this.#history.graph,
+      this.#selection,
+      target,
+      this.#nextLocalWayId,
+    );
     return {
       id: operation.id,
       label: operation.label,
@@ -272,6 +278,7 @@ export class CatlasEditor {
         const contextMenuCleared = this.#clearContextMenu();
         this.#changePreview = null;
         if (this.#history.perform(operation.action, operation.annotation)) {
+          if (operation.id === "split") this.#nextLocalWayId -= 1;
           this.#selection =
             operation.selection && this.#history.graph.has(operation.selection)
               ? operation.selection

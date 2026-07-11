@@ -4,7 +4,9 @@ import {
   GitMergeIcon,
   PencilLineIcon,
   RotateCwIcon,
+  ScissorsIcon,
   Trash2Icon,
+  type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -74,6 +76,8 @@ function EditorContextMenu({
     : null;
   const joinOperation =
     targetEntity?.type === "way" ? editor.operation("join", contextMenu.target) : null;
+  const splitOperation =
+    targetEntity?.type === "node" ? editor.operation("split", contextMenu.target) : null;
 
   return (
     <ContextMenuContent aria-label="Editor context menu" className="editor-context-menu min-w-44">
@@ -93,11 +97,16 @@ function EditorContextMenu({
         </ContextMenuLabel>
       )}
 
-      {joinOperation || deleteOperation ? (
+      {joinOperation || splitOperation || deleteOperation ? (
         <>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            {joinOperation ? <JoinContextMenuItem operation={joinOperation} /> : null}
+            {joinOperation ? (
+              <EditorOperationContextMenuItem icon={GitMergeIcon} operation={joinOperation} />
+            ) : null}
+            {splitOperation ? (
+              <EditorOperationContextMenuItem icon={ScissorsIcon} operation={splitOperation} />
+            ) : null}
             {deleteOperation ? (
               <ContextMenuItem
                 className="editor-context-menu__item"
@@ -122,7 +131,13 @@ function EditorContextMenu({
   );
 }
 
-function JoinContextMenuItem({ operation }: { readonly operation: Operation }) {
+function EditorOperationContextMenuItem({
+  icon: Icon,
+  operation,
+}: {
+  readonly icon: LucideIcon;
+  readonly operation: Operation;
+}) {
   const item = (
     <ContextMenuItem
       className="editor-context-menu__item"
@@ -130,7 +145,7 @@ function JoinContextMenuItem({ operation }: { readonly operation: Operation }) {
       onSelect={() => operation.execute()}
       title={operation.disabledReason ?? operation.label}
     >
-      <GitMergeIcon />
+      <Icon />
       {operation.label}
     </ContextMenuItem>
   );

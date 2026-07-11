@@ -1,9 +1,15 @@
 import { Graph } from "../graph";
-import { deleteEntity, joinedLineNodeIds, joinWays } from "./actions";
+import {
+  deleteEntity,
+  joinedLineNodeIds,
+  joinWays,
+  splitLineNodeIds,
+  splitWayAtNode,
+} from "./actions";
 import type { GraphAction } from "./history";
 import type { EntityRef } from "./types";
 
-export type OperationId = "delete" | "join";
+export type OperationId = "delete" | "join" | "split";
 
 export type Operation = {
   readonly id: OperationId;
@@ -24,6 +30,7 @@ export const getOperation = (
   graph: Graph,
   selection: EntityRef | null,
   target: EntityRef | null = null,
+  nextLocalWayId = -1,
 ): OperationDefinition => {
   if (id === "delete") {
     const deleteTarget = target ?? selection;
@@ -65,6 +72,47 @@ export const getOperation = (
       annotation: "Join lines",
       action:
         available && selectedLine && targetLine ? joinWays(selectedLine.id, targetLine.id) : null,
+      selection: selectedLine ? { type: "way", id: selectedLine.id } : null,
+    };
+  }
+
+  if (id === "split") {
+    const selectedWay = selection?.type === "way" ? graph.way(selection.id) : undefined;
+    const targetNode = target?.type === "node" ? graph.node(target.id) : undefined;
+    const selectedLine = selectedWay?.geometryKind === "line" ? selectedWay : null;
+    const splitNodeIds =
+      selectedLine && targetNode ? splitLineNodeIds(selectedLine, targetNode.id) : null;
+    const localWayIdAvailable = !graph.has({ type: "way", id: nextLocalWayId });
+    const available = splitNodeIds !== null && localWayIdAvailable;
+
+    let disabledReason: string | null = null;
+    if (!selection || !selectedWay) disabledReason = "Select a line to split.";
+    else if (selectedWay.geometryKind !== "line") disabledReason = "Only lines can be split.";
+    else if (!target || !targetNode) {
+      disabledReason = "Right-click a vertex to split the selected line.";
+    } else if (!selectedWay.nodeIds.includes(targetNode.id)) {
+      disabledReason = "The vertex must belong to the selected line.";
+    } else if (
+      selectedWay.nodeIds[0] === targetNode.id ||
+      selectedWay.nodeIds.at(-1) === targetNode.id
+    ) {
+      disabledReason = "Endpoints cannot split a line.";
+    } else if (!splitNodeIds) {
+      disabledReason = "Choose a vertex that occurs once in the line.";
+    } else if (!localWayIdAvailable) {
+      disabledReason = "No local Way ID is available.";
+    }
+
+    return {
+      id,
+      label: "Split way",
+      available,
+      disabledReason,
+      annotation: "Split way",
+      action:
+        available && selectedLine && targetNode
+          ? splitWayAtNode(selectedLine.id, targetNode.id, nextLocalWayId)
+          : null,
       selection: selectedLine ? { type: "way", id: selectedLine.id } : null,
     };
   }
