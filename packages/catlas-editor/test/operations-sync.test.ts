@@ -21,6 +21,7 @@ const emptyViewport = {
 
 const unusedAuth = {
   createSession: () => Effect.die("not used"),
+  listChangesets: () => Effect.die("not used"),
   verifySession: () => Effect.die("not used"),
   revokeSession: () => Effect.die("not used"),
 };

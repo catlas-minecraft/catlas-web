@@ -1,6 +1,7 @@
 import {
   Api,
   type AuthSession,
+  type ChangesetListPage,
   type ChangesetUploadDiffResult,
   type ChangesetUploadPayload,
   type SessionJwtToken,
@@ -51,6 +52,10 @@ export type EditorApiService = {
   readonly loadViewport: (
     bbox: readonly [number, number, number, number],
   ) => Effect.Effect<ViewportSnapshot, EditorApiError>;
+  readonly listChangesets: (input: {
+    readonly beforeId?: number | undefined;
+    readonly limit: number;
+  }) => Effect.Effect<ChangesetListPage, EditorApiError>;
   readonly save: (
     payload: ChangesetUploadPayload,
     comment: string | null,
@@ -91,6 +96,15 @@ export const EditorApiLive = (baseUrl: string, getSessionJwt: () => string | nul
             client.viewport
               .getViewport({
                 urlParams: { bbox: bbox.join(","), includeRelations: false },
+              })
+              .pipe(Effect.mapError(toEditorApiError)),
+          listChangesets: ({ beforeId, limit }) =>
+            client.changesets
+              .listChangesets({
+                urlParams: {
+                  limit,
+                  ...(beforeId === undefined ? {} : { beforeId }),
+                },
               })
               .pipe(Effect.mapError(toEditorApiError)),
           save: (payload, comment) =>

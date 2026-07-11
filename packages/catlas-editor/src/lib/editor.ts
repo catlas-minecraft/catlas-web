@@ -241,6 +241,10 @@ export class CatlasEditor {
     return review;
   }
 
+  async listChangesets(input: { readonly beforeId?: number | undefined; readonly limit: number }) {
+    return this.#runApi(EditorApi.pipe(Effect.flatMap((api) => api.listChangesets(input))));
+  }
+
   previewChange(ref: EntityRef | null) {
     if (!ref) {
       if (this.#clearChangePreview()) this.#emit();

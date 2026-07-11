@@ -59,6 +59,7 @@ export const ChangesetsApiLive = HttpApiBuilder.group(Api, "changesets", (handle
     const repository = yield* GeospatialRepository;
 
     return handlers
+      .handle("listChangesets", ({ urlParams }) => repository.listPublishedChangesets(urlParams))
       .handle("createChangesetOsm", ({ payload: { comment } }) =>
         CurrentActor.pipe(
           Effect.flatMap(({ actorId }) => repository.createChangeset(comment, actorId)),

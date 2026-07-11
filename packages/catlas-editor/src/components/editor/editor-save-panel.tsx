@@ -1,4 +1,5 @@
 import { CloudUploadIcon } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import type { CatlasEditor } from "@/lib/editor";
+import { changesetsQueryKey } from "./editor-changeset-sidebar";
 import { useEditorSnapshot } from "./use-editor-snapshot";
 
 export function EditorSavePanel({ editor }: { readonly editor: CatlasEditor | null }) {
@@ -21,6 +23,7 @@ export function EditorSavePanel({ editor }: { readonly editor: CatlasEditor | nu
 }
 
 function SavePanelContent({ editor }: { readonly editor: CatlasEditor }) {
+  const queryClient = useQueryClient();
   const snapshot = useEditorSnapshot(editor);
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState("");
@@ -41,6 +44,7 @@ function SavePanelContent({ editor }: { readonly editor: CatlasEditor }) {
     if (!canSave) return;
     void editor.save(comment.trim() || null).then(() => {
       if (editor.getSnapshot().save.status !== "saved") return;
+      void queryClient.invalidateQueries({ queryKey: changesetsQueryKey });
       setOpen(false);
       setComment("");
     });

@@ -21,6 +21,7 @@ import {
 } from "@catlas/db";
 import {
   type BBox2D,
+  ChangesetListPage,
   ChangesetUploadDiffResult,
   type ChangesetUploadPayload,
   ChangesetNotOpenError,
@@ -122,6 +123,10 @@ type RepositoryChangesetUploadPayload = {
 };
 
 export interface GeospatialRepositoryService {
+  listPublishedChangesets: (input: {
+    beforeId?: number | undefined;
+    limit: number;
+  }) => Effect.Effect<ChangesetListPage, GeospatialOperationError>;
   getNode: (
     id: number,
   ) => Effect.Effect<NodeDetailSnapshot, NotFoundError | GeospatialOperationError>;
@@ -623,6 +628,32 @@ export const GeospatialRepositoryLive = Layer.effect(
             : Effect.fail(new ChangesetNotOpenError({ changesetId: id })),
         ),
       );
+
+    const listPublishedChangesets = (input: { beforeId?: number | undefined; limit: number }) => {
+      let query = coreDb
+        .selectFrom("changesets")
+        .selectAll()
+        .where("status", "=", "published")
+        .orderBy("id", "desc")
+        .limit(input.limit + 1);
+
+      if (input.beforeId !== undefined) {
+        query = query.where("id", "<", input.beforeId);
+      }
+
+      return query.pipe(
+        runQuery,
+        Effect.map((rows) => {
+          const pageRows = rows.slice(0, input.limit);
+          const hasNextPage = rows.length > input.limit;
+
+          return new ChangesetListPage({
+            changesets: pageRows.map(toChangesetSnapshot),
+            nextBeforeId: hasNextPage ? (pageRows.at(-1)?.id ?? null) : null,
+          });
+        }),
+      );
+    };
 
     const loadNodeById = (id: number) =>
       coreDb
@@ -2278,6 +2309,7 @@ export const GeospatialRepositoryLive = Layer.effect(
     });
 
     return {
+      listPublishedChangesets,
       getNode,
       getWay,
       getRelation,

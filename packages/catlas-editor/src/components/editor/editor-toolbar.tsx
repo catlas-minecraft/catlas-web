@@ -1,4 +1,5 @@
 import {
+  HistoryIcon,
   MapPinIcon,
   ListChecksIcon,
   MonitorIcon,
@@ -191,7 +192,15 @@ function ThemeMenu() {
   );
 }
 
-export function EditorToolRail({ editor }: { readonly editor: CatlasEditor | null }) {
+export function EditorToolRail({
+  editor,
+  changesetsOpen,
+  onToggleChangesets,
+}: {
+  readonly editor: CatlasEditor | null;
+  readonly changesetsOpen: boolean;
+  readonly onToggleChangesets: () => void;
+}) {
   if (!editor)
     return (
       <nav
@@ -199,10 +208,24 @@ export function EditorToolRail({ editor }: { readonly editor: CatlasEditor | nul
         aria-label="Editing tools"
       />
     );
-  return <ToolRailContent editor={editor} />;
+  return (
+    <ToolRailContent
+      changesetsOpen={changesetsOpen}
+      editor={editor}
+      onToggleChangesets={onToggleChangesets}
+    />
+  );
 }
 
-function ToolRailContent({ editor }: { readonly editor: CatlasEditor }) {
+function ToolRailContent({
+  changesetsOpen,
+  editor,
+  onToggleChangesets,
+}: {
+  readonly changesetsOpen: boolean;
+  readonly editor: CatlasEditor;
+  readonly onToggleChangesets: () => void;
+}) {
   const snapshot = useEditorSnapshot(editor);
   const deleteOperation = editor.operation("delete");
 
@@ -269,6 +292,29 @@ function ToolRailContent({ editor }: { readonly editor: CatlasEditor }) {
           >
             ⌫
           </kbd>
+        </TooltipContent>
+      </Tooltip>
+
+      <div className="flex-1" />
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="tool-rail__tooltip-trigger inline-flex">
+            <Button
+              aria-label="Toggle published changesets"
+              aria-pressed={changesetsOpen}
+              onClick={onToggleChangesets}
+              size="icon"
+              title="Published changesets"
+              type="button"
+              variant={changesetsOpen ? "secondary" : "ghost"}
+            >
+              <HistoryIcon data-icon="inline-start" />
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>
+          Published changesets
         </TooltipContent>
       </Tooltip>
     </nav>

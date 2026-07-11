@@ -14,6 +14,8 @@
     "@catlas/domain": "workspace:^",
     "@effect/platform": "0.96.0",
     "@fontsource-variable/geist": "^5.2.9",
+    "@tanstack/react-query": "^5.95.2",
+    "@tanstack/react-virtual": "^3.14.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",

@@ -36,6 +36,11 @@ export class ChangesetSnapshot extends Schema.Class<ChangesetSnapshot>("Changese
   publishedAt: Schema.Union(Schema.Number, Schema.Null),
 }) {}
 
+export class ChangesetListPage extends Schema.Class<ChangesetListPage>("ChangesetListPage")({
+  changesets: Schema.Array(ChangesetSnapshot),
+  nextBeforeId: Schema.Union(Schema.Number, Schema.Null),
+}) {}
+
 export class ChangesetCreateResult extends Schema.Class<ChangesetCreateResult>(
   "ChangesetCreateResult",
 )({
@@ -312,6 +317,13 @@ const viewportUrlParams = Schema.Struct({
   }),
 });
 
+const changesetListUrlParams = Schema.Struct({
+  beforeId: Schema.optional(Schema.NumberFromString.pipe(Schema.int(), Schema.positive())),
+  limit: Schema.optionalWith(Schema.NumberFromString.pipe(Schema.int(), Schema.between(1, 100)), {
+    default: () => 50,
+  }),
+});
+
 export class ViewportApiGroup extends HttpApiGroup.make("viewport")
   .add(
     HttpApiEndpoint.get("getViewport", "/")
@@ -324,6 +336,12 @@ export class ViewportApiGroup extends HttpApiGroup.make("viewport")
 
 export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
   .add(
+    HttpApiEndpoint.get("listChangesets", "/")
+      .addSuccess(ChangesetListPage)
+      .addError(GeospatialOperationError, { status: 500 })
+      .setUrlParams(changesetListUrlParams),
+  )
+  .add(
     HttpApiEndpoint.put("createChangesetOsm", "/create")
       .addSuccess(ChangesetCreateResult)
       .addError(UnauthorizedError, { status: 401 })
@@ -333,7 +351,8 @@ export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
         Schema.Struct({
           comment: Schema.Union(Schema.String, Schema.Null),
         }),
-      ),
+      )
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.post(
@@ -349,7 +368,8 @@ export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
       .addError(InvalidGeometryStateError, { status: 409 })
       .addError(ValidationError, { status: 400 })
       .addError(GeospatialOperationError, { status: 500 })
-      .setPayload(ChangesetUploadRequest),
+      .setPayload(ChangesetUploadRequest)
+      .middleware(WriteAuthorization),
   )
   .add(
     HttpApiEndpoint.put("closeChangeset")`/${HttpApiSchema.param("id", EntityIdFromString)}/close`
@@ -358,10 +378,10 @@ export class ChangesetsApiGroup extends HttpApiGroup.make("changesets")
       .addError(NotFoundError, { status: 404 })
       .addError(VersionConflictError, { status: 409 })
       .addError(ChangesetNotOpenError, { status: 409 })
-      .addError(GeospatialOperationError, { status: 500 }),
+      .addError(GeospatialOperationError, { status: 500 })
+      .middleware(WriteAuthorization),
   )
-  .prefix("/changesets")
-  .middleware(WriteAuthorization) {}
+  .prefix("/changesets") {}
 
 export class NodesApiGroup extends HttpApiGroup.make("nodes")
   .add(
