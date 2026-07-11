@@ -75,13 +75,13 @@ export function EditorChangesReview({
 
   return (
     <aside className="inspector changes-review flex flex-col h-full min-h-0 min-w-0 bg-background overflow-hidden">
-      <header className="changes-review__header flex items-start justify-between gap-2 flex-[0_0_auto] min-h-[74px] p-3 border-b border-border [&>div]:min-w-0">
+      <header className="changes-review__header flex items-start justify-between gap-2 flex-[0_0_auto] min-h-18.5 p-3 border-b border-border [&>div]:min-w-0">
         <div>
           <span className="eyebrow text-muted-foreground text-[9px] font-[750] tracking-[0.12em] uppercase">
             Changeset
           </span>
           <h2 className="text-sm font-[650] leading-tight mt-0.5">Changes</h2>
-          <p className="text-muted-foreground text-[11px] mt-[3px]">
+          <p className="text-muted-foreground text-[11px] mt-0.75">
             {review.counts.total === 1
               ? "1 pending change"
               : `${review.counts.total} pending changes`}
@@ -118,7 +118,7 @@ export function EditorChangesReview({
         >
           <ReviewSummary review={review} />
           {review.counts.total === 0 ? (
-            <Empty className="changes-review__empty min-h-[240px] border-0">
+            <Empty className="changes-review__empty min-h-60 border-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <CircleCheckIcon />
@@ -128,7 +128,7 @@ export function EditorChangesReview({
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="changes-review__groups flex flex-col gap-[18px] p-3">
+            <div className="changes-review__groups flex flex-col gap-4.5 p-3">
               {KINDS.map((kind) => (
                 <ChangeGroup
                   entries={review.entries.filter((entry) => entry.kind === kind)}
@@ -162,7 +162,7 @@ export function EditorChangesReview({
 function ReviewSummary({ review }: { readonly review: ChangesetReview }) {
   return (
     <div
-      className="changes-review__summary flex flex-wrap gap-[6px] p-[10px_12px] border-b border-border"
+      className="changes-review__summary flex flex-wrap gap-1.5 p-[10px_12px] border-b border-border"
       aria-label="Change counts"
     >
       <Badge variant="secondary">{review.counts.created} created</Badge>
@@ -208,6 +208,8 @@ function ChangeGroup({
   );
 }
 
+const newLocal =
+  "bg-muted rounded-sm text-[10px] leading-[1.4] max-w-full [overflow-wrap:anywhere] px-1 py-0.5";
 function ChangeItem({
   active,
   entry,
@@ -246,26 +248,24 @@ function ChangeItem({
           </ItemActions>
         </ItemHeader>
 
-        <div className="change-item__fields flex flex-col gap-[5px] min-w-0 basis-full">
+        <div className="change-item__fields flex flex-col gap-1.25 min-w-0 basis-full">
           {entry.fields.map((field) => (
             <div
-              className="change-field items-start grid gap-[6px] grid-cols-[minmax(58px,78px)_minmax(0,1fr)]"
+              className="change-field items-start grid gap-1.5 grid-cols-[minmax(58px,78px)_minmax(0,1fr)]"
               key={field.key}
             >
-              <span className="text-muted-foreground text-[10px] leading-[1.6] [overflow-wrap:anywhere]">
+              <span className="text-muted-foreground text-[10px] leading-[1.6] wrap-anywhere">
                 {field.label}
               </span>
               <div className="change-field__values flex flex-wrap gap-1 items-center min-w-0">
                 {entry.kind !== "create" ? (
-                  <code className="bg-muted rounded-sm text-[10px] leading-[1.4] max-w-full [overflow-wrap:anywhere] px-1 py-0.5">
-                    {formatValue(field.before)}
-                  </code>
+                  <code className={newLocal}>{formatValue(field.before)}</code>
                 ) : null}
                 {entry.kind === "modify" ? (
                   <ArrowRightIcon className="text-muted-foreground h-3 w-3" aria-hidden="true" />
                 ) : null}
                 {entry.kind !== "delete" ? (
-                  <code className="bg-muted rounded-sm text-[10px] leading-[1.4] max-w-full [overflow-wrap:anywhere] px-1 py-0.5">
+                  <code className="bg-muted rounded-sm text-[10px] leading-[1.4] max-w-full wrap-anywhere px-1 py-0.5">
                     {formatValue(field.after)}
                   </code>
                 ) : null}

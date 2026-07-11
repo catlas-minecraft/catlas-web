@@ -110,7 +110,7 @@ export function EditorChangesetSidebar({
             History
           </span>
           <h2 className="mt-0.5 truncate text-sm font-[650] leading-tight">Changesets</h2>
-          <p className="mt-[3px] text-[11px] text-muted-foreground">Published map changes</p>
+          <p className="mt-0.75 text-[11px] text-muted-foreground">Published map changes</p>
         </div>
         <div className="flex items-center gap-1">
           <Tooltip>
@@ -178,7 +178,7 @@ export function EditorChangesetSidebar({
           </Alert>
         </div>
       ) : changesets.length === 0 ? (
-        <Empty className="min-h-[240px] border-0">
+        <Empty className="min-h-60 border-0">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <CircleCheckIcon />

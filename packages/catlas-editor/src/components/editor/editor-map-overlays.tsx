@@ -46,7 +46,7 @@ function MapOverlayContent({ editor }: { readonly editor: CatlasEditor }) {
       <DraftControls editor={editor} snapshot={snapshot} />
       <StatusOverlay editor={editor} snapshot={snapshot} />
       <EditorContextMenu editor={editor} snapshot={snapshot} />
-      <div className="coordinate-hint absolute bottom-2.5 right-2.5 z-[8] px-1.5 py-1 rounded-sm bg-foreground/82 text-background font-mono text-[10px]">
+      <div className="coordinate-hint absolute bottom-2.5 right-2.5 z-8 px-1.5 py-1 rounded-sm bg-foreground/82 text-background font-mono text-[10px]">
         {snapshot.cursor
           ? `X ${formatCoordinate(snapshot.cursor.x)}  Z ${formatCoordinate(snapshot.cursor.z)}`
           : "X --  Z --"}

@@ -186,10 +186,10 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
 
         <Separator />
         <InspectorSection title="All tags">
-          <div className="tag-list grid gap-[6px]">
+          <div className="tag-list grid gap-1.5">
             {Object.entries(entity.tags).map(([key, value]) => (
               <div
-                className="tag-row items-center grid gap-[5px] grid-cols-[minmax(54px,72px)_minmax(0,1fr)_24px]"
+                className="tag-row items-center grid gap-1.25 grid-cols-[minmax(54px,72px)_minmax(0,1fr)_24px]"
                 key={key}
               >
                 <code
@@ -217,14 +217,14 @@ function Inspector({ editor, snapshot }: { editor: CatlasEditor; snapshot: Edito
               </div>
             ))}
             {Object.keys(entity.tags).length === 0 ? (
-              <Empty className="tag-list__empty flex-none min-h-[52px] p-3 border-0">
+              <Empty className="tag-list__empty flex-none min-h-13 p-3 border-0">
                 <EmptyHeader>
                   <EmptyDescription>No tags yet.</EmptyDescription>
                 </EmptyHeader>
               </Empty>
             ) : null}
           </div>
-          <FieldGroup className="tag-add items-end grid gap-[5px] grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_auto] mt-2">
+          <FieldGroup className="tag-add items-end grid gap-1.25 grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_auto] mt-2">
             <Field className="gap-0 min-w-0">
               <FieldLabel className="sr-only" htmlFor="new-tag-key">
                 New tag key
